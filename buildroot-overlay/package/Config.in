@@ -1,3 +1,7 @@
+menu "Beepy drivers"
+	source "package/sharp-drm/Config.in"
+endmenu
+
 menu "Target packages"
 
 	source "package/busybox/Config.in"

@@ -1,0 +1,3 @@
+[submodule "buildroot-overlay/package/sharp-drm/module"]
+	path = buildroot-overlay/package/sharp-drm/module
+	url = git@github.com:ardangelo/sharp-drm-driver.git

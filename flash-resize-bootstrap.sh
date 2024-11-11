@@ -39,17 +39,23 @@ docker run -it --rm --device=/dev/$DEV$PART --name debootstrap --privileged\
 	debootstrap:latest /bin/bash -c " \
 mkdir -p /mnt/root /mnt/debroot; \
 debootstrap --arch=riscv64 \
-	--include="openntpd,network-manager,build-essential,dkms,python3-spidev,wget,zip,device-tree-compiler,ssh,u-boot-tools,nano,less,dbus" \
+	--include="openntpd,network-manager,build-essential,dkms,python3-spidev,wget,zip,device-tree-compiler,ssh,u-boot-tools,nano,less,dbus,systemd-timesync,ca-certificates,rsync,build-essential" \
 	unstable /mnt/debroot; \
 mount /dev/$DEV$PART /mnt/root; \
-rm -rf /mnt/root/sbin; \
+rm -rf /mnt/root/sbin /mnt/root/bin; \
+mv /mnt/root/etc/init.d /mnt/root/root/init.d; \
 rsync -av --exclude="/mnt/debroot/bin" --exclude="/mnt/debroot/lib" /mnt/debroot/ /mnt/root/; \
 rsync -av /mnt/debroot/bin/ /mnt/root/bin/; \
 rsync -av /mnt/debroot/lib/ /mnt/root/lib/; \
 mount -o bind /dev /mnt/root/dev; \
 mount -o bind /proc /mnt/root/proc; \
 mount -o bind /sys /mnt/root/sys; \
-chroot /mnt/root /bin/bash -c 'echo "j" | passwd "$1" --stdin'; \
+chroot /mnt/root /bin/bash -c ' \
+	systemctl enable systemd-timesyncd; timedatectl set-ntp true; \
+	echo \"ca-certificates ca-certificates/activate_on_install boolean true\" | debconf-set-selections; \
+	dpkg-reconfigure -f noninteractive ca-certificates; \
+	update-ca-certificates; \
+	echo "j" | passwd "$1" --stdin'; \
 ln -sf /dev/null /mnt/root/etc/systemd/system/serial-getty@hvc0.service; \
 umount /mnt/root; \
 "
