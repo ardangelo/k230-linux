@@ -33,6 +33,7 @@ apt-get install -y   git sed make binutils build-essential diffutils gcc  g++ ba
 ```bash
 
 make CONF=k230d_canmv_defconfig #build k230d canmv image (kernel and rootfs both 64bit);
+# make CONF=k230d_canmv_defconfig  BR2_PRIMARY_SITE=https://kendryte-download.canaan-creative.com/k230/downloads/dl/ #download package from kendryte
 # make CONF=k230_canmv_defconfig # build k230 canmv image
 # make CONF=k230d_canmv_ilp32_defconfig  #build k230d canmv 32bit rootfs;
 # make help # view help

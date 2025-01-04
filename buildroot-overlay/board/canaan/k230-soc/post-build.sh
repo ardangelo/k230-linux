@@ -52,13 +52,35 @@ gen_version()
 
 	cd -;
 }
-# boot_file_proc()
-# {
-# 	#BINARIES_DIR
-# 	cd ${TARGET_DIR}/boot
-# 	${UBOOT_BUILD_DIR}/tools/mkimage -A riscv -O linux -T kernel -C none -a 0 -e 0 -n linux -d ${BINARIES_DIR}/fw_jump.bin  fw_jump_add_uboot_head.bin
-# 	rm -rf  k.dtb; ln -s ${DTB} k.dtb
-# 	cd -;
-# }
+auto_boot_proc()
+{
+	set -x
+	#BR2_ROOTFS_OVERLAY=$(cat ${BASE_DIR}/.config | grep BR2_ROOTFS_OVERLAY | cut -d= -f2  |  tr -d '"' )
+	local config="${BASE_DIR}/.config"
+	local CONF=$(basename ${BASE_DIR})
+	local auto_boot_f="${rootfs_dir}/etc/init.d/S100${CONF}"
+
+
+	cat >${auto_boot_f} <<EOF
+[ "\$1" = "stop" ] && exit 0
+
+EOF
+
+	if  $(cat ${config} |  grep  BR2_PACKAGE_RTL8189FS=y >/dev/null 2>&1 ); then
+		echo " modprobe 8189fs " >> ${auto_boot_f}
+	fi
+
+	if  $(cat ${config} |  grep  BR2_PACKAGE_BCMDHD=y >/dev/null 2>&1 ); then
+		echo " modprobe bcmdhd " >> ${auto_boot_f}
+	fi
+
+
+	if  $(cat ${config} |  grep  BR2_PACKAGE_AIC8800=y >/dev/null 2>&1 ); then
+		echo " modprobe aic_load_fw " >> ${auto_boot_f}
+		echo " modprobe aic8800_fdrv " >> ${auto_boot_f}
+		echo " modprobe aic_btusb " >> ${auto_boot_f}
+	fi
+	chmod a+x ${auto_boot_f}
+}
 gen_version
-#boot_file_proc
+auto_boot_proc
