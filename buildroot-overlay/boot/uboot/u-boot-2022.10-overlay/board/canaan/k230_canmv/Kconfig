@@ -22,9 +22,20 @@ choice
 
     config CANMV_LPDDR3_2133
         bool  "k230 canmv ddr3 2133"
+
     config CANMV_V3_LPDDR4_2667
 	    bool "canmv v3 LP4_2667"
+        help
+            "CANMV V3,lushanpai,01studio"
+
     config CANMV_V3_LPDDR4_3200
 	    bool "canmv v3 LP4_3200"
+        help
+            "CANMV V3,lushanpai,01studio"
+
+    config CANMV_LPDDR4_1600_WITHOUT_ODT
+	    bool "canmv  LP4_1600 WITHOUT ODT,"
+        help
+            "CANMV V3,lushanpai,01studio"
 endchoice
 endif

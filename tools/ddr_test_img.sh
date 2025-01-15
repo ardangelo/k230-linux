@@ -92,3 +92,5 @@ sed -i  "/^blinux=.*$/d" "${default_env_file}"
 sed -i "${linux_line}i\blinux=${blinux_org}"  "${default_env_file}"
 
 rm -rf ${rootfs_overlay}/${vpu}   ${rootfs_overlay}/${cpu}  ${vpu_elf}   ${cpu_elf}
+rm -rf $(dirname $(readlink -f "$0"))/../output/${CONF}/target/${vpu}
+rm -rf $(dirname $(readlink -f "$0"))/../output/${CONF}/target/${cpu}

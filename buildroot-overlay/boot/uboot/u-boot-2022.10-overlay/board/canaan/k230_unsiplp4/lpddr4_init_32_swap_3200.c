@@ -42,7 +42,7 @@
 
 int change_pll_3100(void);
 
-void ddr4_init_3200(void)
+void ddr_init_board(void)
 {
     int data;
     int train_data=0;
