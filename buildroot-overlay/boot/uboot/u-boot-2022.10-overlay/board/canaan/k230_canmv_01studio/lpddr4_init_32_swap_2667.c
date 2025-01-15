@@ -90,7 +90,7 @@ uint32_t cfg_pll(int fb_div,int ref_div,int out_div,int pllx_cfg0,int pllx_cfg1,
 
 }
 
-int change_pll_2660(void)
+static int change_pll_2660(void)
 {
     /* enable cache */
     //Note: The recommended value for BWADJ is FBK_DIV/2.Valid values range from 0 to 0xFFF.
@@ -129,10 +129,11 @@ int change_pll_2660(void)
 
     //sys_exit(0);
 }
-void ddr_init_2667()
+void ddr_init_board(void)
 {
 int data;
 int train_data=0;
+    printf("lpddr4 2660\n");
     change_pll_2660();
 
  //reg_read (0x91100060,data);
