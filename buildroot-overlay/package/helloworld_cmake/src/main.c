@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <execinfo.h> // for backtrace
 #include <signal.h>   // for signal handling
+#include "list_file.h"
 
 #define STACK_SIZE 100
 
@@ -44,11 +45,12 @@ void func_a() {
     func_b();
 }
 
-int main() {
+int main(int argc, char *argv[]) {
     printf("hellowold cmake\n");
     // 注册信号处理函数
     signal(SIGSEGV, signal_handler); // 捕获段错误
     signal(SIGABRT, signal_handler); // 捕获 abort
+    list_files(argc, argv);
 
     func_a();
 
