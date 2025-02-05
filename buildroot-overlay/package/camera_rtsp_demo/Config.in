@@ -1,6 +1,5 @@
 config BR2_PACKAGE_CAMERA_RTSP_DEMO
     bool "Enable Camera RTSP Demo"
-    depends on BR2_PACKAGE_FFMPEG_AVFORMAT
     depends on BR2_PACKAGE_LIVE555
     depends on BR2_PACKAGE_LIB_RTSPSERVER
     help
