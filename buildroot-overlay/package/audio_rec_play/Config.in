@@ -1,0 +1,6 @@
+config BR2_PACKAGE_AUDIO_REC_PLAY
+    bool "audio_rec_play"
+    select BR2_PACKAGE_ALSA_UTILS
+    select BR2_PACKAGE_SPEEXDSP
+    help
+      This is a package for audio recording and playback and enables audio quality enhancement features.
