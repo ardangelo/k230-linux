@@ -72,6 +72,7 @@ menu "Audio and video applications"
 	source "package/librtsp_server/Config.in"
 	source "package/mvx_player/Config.in"
 	source "package/camera_rtsp_demo/Config.in"
+	source "package/audio_rec_play/Config.in"
 endmenu
 
 menu "Compressors and decompressors"
@@ -2855,6 +2856,7 @@ menu "canaan package"
 		source "package/ai2d_kpu/Config.in"
 	endmenu
 	source "package/aic8800/Config.in"
+	source "package/aic8800_sdio/Config.in"
 	source "package/bluez_inc/Config.in"
 	source "package/helloworld_cmake/Config.in"
 endmenu

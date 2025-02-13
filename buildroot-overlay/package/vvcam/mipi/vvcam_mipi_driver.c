@@ -66,6 +66,8 @@
 #include "vvcam_mipi.h"
 #include "vvcam_mipi_driver.h"
 #include "k230_vi.h"
+#include <linux/gpio/consumer.h>
+
 
 static int vvcam_mipi_open(struct inode *inode, struct file *file)
 {
@@ -299,6 +301,16 @@ static int vvcam_mipi_probe(struct platform_device *pdev)
     if (IS_ERR(mipi_dev->reset_sensor)) {
         dev_err(&pdev->dev, "can't get mipi sensor reset\n");
     }
+
+    mipi_dev->reset_gpio = devm_gpiod_get(&pdev->dev, "reset", GPIOD_OUT_HIGH);
+    if (IS_ERR(mipi_dev->reset_gpio)) {
+		printk("failed to acquire reset gpio\n");
+		// return PTR_ERR(lt9611->reset_gpio);
+	}
+
+    gpiod_set_value_cansleep(mipi_dev->reset_gpio, 1);
+
+    printk("---------------reset --- --------\n");
 
     mutex_init(&mipi_dev->mlock);
 	platform_set_drvdata(pdev, mipi_dev);

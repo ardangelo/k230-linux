@@ -77,6 +77,7 @@ struct vvcam_mipi_dev {
     int irq;
     struct reset_control* reset_csi;
     struct reset_control* reset_sensor;
+    struct gpio_desc *reset_gpio;
 };
 
 int vvcam_mipi_reset(struct vvcam_mipi_dev *mipi_dev, uint32_t val);
