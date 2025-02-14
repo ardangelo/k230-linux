@@ -19,6 +19,14 @@ struct v4l2_drm_video_buffer {
     unsigned index;
 };
 
+struct v4l2_crop_size {
+    uint32_t width;
+    uint32_t height;
+    uint32_t offset_x;
+    uint32_t offset_y;
+    uint32_t crop_en;
+};
+
 struct v4l2_drm_context {
     unsigned width;
     unsigned height;
@@ -32,6 +40,7 @@ struct v4l2_drm_context {
     struct display_plane* plane;
     struct display_buffer** display_buffers;
     struct v4l2_drm_video_buffer* buffers;
+    struct v4l2_crop_size crop_size;
     unsigned offset_x;
     unsigned offset_y;
     bool flag_dqbuf;

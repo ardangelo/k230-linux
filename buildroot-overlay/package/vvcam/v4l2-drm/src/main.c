@@ -53,13 +53,13 @@ static int parse_cmd(int argc, char* argv[], struct v4l2_drm_context* context) {
             "crop-width",
             required_argument,
             NULL,
-            257,
+            'c',
         },
         {
             "crop-height",
             required_argument,
             NULL,
-            258
+            'g'
         },
         {0, 0, 0, 0}
     };
@@ -93,6 +93,18 @@ static int parse_cmd(int argc, char* argv[], struct v4l2_drm_context* context) {
             case 's':
                 // disable display
                 context[context_idx].display = false;
+                break;
+            case 'x':
+                context[context_idx].crop_size.offset_x = atoi(optarg);
+                break;
+            case 'y':
+                context[context_idx].crop_size.offset_y = atoi(optarg);
+                break;
+            case 'g':
+                context[context_idx].crop_size.height = atoi(optarg);
+                break;
+            case 'c':
+                context[context_idx].crop_size.width = atoi(optarg);
                 break;
             default:
                 help(argv[0]);
@@ -144,7 +156,7 @@ int handler(struct v4l2_drm_context* context, bool displayed) {
 }
 
 int main(int argc, char* argv[]) {
-    struct v4l2_drm_context context[9];
+    struct v4l2_drm_context context[9] = {0};
     int flag_display = 0;
 
     int ret = parse_cmd(argc, argv, context);
