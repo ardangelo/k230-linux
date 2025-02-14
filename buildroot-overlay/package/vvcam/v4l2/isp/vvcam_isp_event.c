@@ -318,8 +318,6 @@ int vvcam_isp_s_selection_event(struct vvcam_isp_dev *isp_dev,
 
     ret = vvcam_isp_post_event(&isp_dev->sd, event_pkg);
 
-    printk("%s ---------  --- \n", __func__);
-
     mutex_unlock(&isp_dev->event_shm.event_lock);
 
     return ret;
