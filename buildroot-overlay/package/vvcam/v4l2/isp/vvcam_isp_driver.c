@@ -91,7 +91,7 @@
 #define VVCAM_ISP_DEFAULT_SENSOR_AUTO_JSON    "/etc/vvcam/ov5647.auto.json"
 
 #else
-#define VVCAM_ISP_DEFAULT_SENSOR        "gc2093"
+#define VVCAM_ISP_DEFAULT_SENSOR        "gc2053"
 #define VVCAM_ISP_DEFAULT_SENSOR_MODE   0
 #define VVCAM_ISP_DEFAULT_SENSOR_XML    "/etc/vvcam/gc2093-1920x1080.xml"
 #define VVCAM_ISP_DEFAULT_SENSOR_MANU_JSON    "/etc/vvcam/gc2093-1920x1080_manual.json"
@@ -550,10 +550,48 @@ static int vvcam_isp_enum_mbus_code(struct v4l2_subdev *sd,
     return 0;
 }
 
+
+static int vvcam_isp_set_selection(struct v4l2_subdev *sd,
+				    struct v4l2_subdev_state *sd_state,
+				    struct v4l2_subdev_selection *sel)
+{
+    struct vvcam_isp_dev *isp_dev = v4l2_get_subdevdata(sd);
+    struct vvcam_isp_pad_data *pad_data = &isp_dev->pad_data[sel->pad];
+    struct vvcam_isp_crop_size crop_size;
+    struct vvcam_isp_pad_data *cur_pad = &isp_dev->pad_data[sel->pad];
+    struct vvcam_isp_pad_data *sink_pad;
+    struct vvcam_isp_pad_data *source_pad;
+
+    uint32_t sink_pad_index;
+	int ret = 0;
+
+    sink_pad_index = sel->pad - (sel->pad % VVCAM_ISP_PORT_PAD_NR);
+    sink_pad = &isp_dev->pad_data[sink_pad_index];
+
+
+	if (sel->target != V4L2_SEL_TGT_COMPOSE)
+		return -EINVAL;
+
+    crop_size.height = sel->r.height;
+    crop_size.width = sel->r.width;
+    crop_size.x = sel->r.left;
+    crop_size.y = sel->r.top;
+    
+    // printk("crop_size.height is %d crop_size.width is %d sel->pad is %d \n", crop_size.height, crop_size.width, sel->pad);
+    // printk("crop_size.x is %d crop_size.y is %d \n", crop_size.x, crop_size.y);
+
+    ret = vvcam_isp_s_selection_event(isp_dev, sel->pad, &crop_size);
+    if(ret < 0)
+        printk("vvcam_isp_s_selection_event  failed \n");
+
+	return 0;
+}
+
 static const struct v4l2_subdev_pad_ops vvcam_isp_pad_ops = {
 	.set_fmt        = vvcam_isp_set_fmt,
     .get_fmt        = vvcam_isp_get_fmt,
     .enum_mbus_code = vvcam_isp_enum_mbus_code,
+	.set_selection = vvcam_isp_set_selection,
 };
 
 struct v4l2_subdev_ops vvcam_isp_subdev_ops = {

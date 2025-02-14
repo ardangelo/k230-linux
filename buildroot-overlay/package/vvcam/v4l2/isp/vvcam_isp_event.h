@@ -66,6 +66,7 @@ enum vvcam_isp_vevent_id {
     VVCAM_ISP_EVENT_STREAMOFF,
     VVCAM_ISP_EVENT_S_CTRL,
     VVCAM_ISP_EVENT_G_CTRL,
+    VVCAM_ISP_EVENT_S_SELECTION,
     VVCAM_ISP_EVENT_MAX,
 };
 
@@ -105,6 +106,13 @@ struct vvcam_isp_event_pkg {
     uint8_t data[2048];
 };
 
+struct vvcam_isp_crop_size {
+    uint32_t width;
+    uint32_t height;
+    uint32_t x;
+    uint32_t y;
+};
+
 #define VVCAM_ISP_IOC_BUFDONE    _IOWR('I',  BASE_VIDIOC_PRIVATE + 0, struct vvcam_isp_buf)
 
 #ifdef __KERNEL__
@@ -116,6 +124,8 @@ int vvcam_isp_qbuf_event(struct vvcam_isp_dev *isp_dev, int pad, struct vvcam_vb
 int vvcam_isp_s_stream_event(struct vvcam_isp_dev *isp_dev, int pad, uint32_t status);
 int vvcam_isp_s_ctrl_event(struct vvcam_isp_dev *isp_dev, int pad, struct v4l2_ctrl *ctrl);
 int vvcam_isp_g_ctrl_event(struct vvcam_isp_dev *isp_dev, int pad, struct v4l2_ctrl *ctrl);
+int vvcam_isp_s_selection_event(struct vvcam_isp_dev *isp_dev, int pad, struct vvcam_isp_crop_size *crop_size);
+
 
 #endif
 
