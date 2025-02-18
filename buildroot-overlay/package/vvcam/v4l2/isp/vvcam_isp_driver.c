@@ -83,21 +83,28 @@
 
 #ifdef VVCAM_PLATFORM_REGISTER
 
-#if 1
+
+#ifdef  BR2_PACKAGE_VVCAM_DEF_SENSOR_OV5647
 #define VVCAM_ISP_DEFAULT_SENSOR        "ov5647"
 #define VVCAM_ISP_DEFAULT_SENSOR_MODE   0
 #define VVCAM_ISP_DEFAULT_SENSOR_XML    "/etc/vvcam/ov5647.xml"
 #define VVCAM_ISP_DEFAULT_SENSOR_MANU_JSON    "/etc/vvcam/ov5647.manual.json"
 #define VVCAM_ISP_DEFAULT_SENSOR_AUTO_JSON    "/etc/vvcam/ov5647.auto.json"
-
-#else
+#elif defined BR2_PACKAGE_VVCAM_DEF_SENSOR_GC2093
+#define VVCAM_ISP_DEFAULT_SENSOR        "gc2093"
+#define VVCAM_ISP_DEFAULT_SENSOR_MODE   0
+#define VVCAM_ISP_DEFAULT_SENSOR_XML    "/etc/vvcam/gc2093-1920x1080.xml"
+#define VVCAM_ISP_DEFAULT_SENSOR_MANU_JSON    "/etc/vvcam/gc2093-1920x1080_manual.json"
+#define VVCAM_ISP_DEFAULT_SENSOR_AUTO_JSON    "/etc/vvcam/gc2093-1920x1080_auto.json"
+#elif defined BR2_PACKAGE_VVCAM_DEF_SENSOR_GC2053
 #define VVCAM_ISP_DEFAULT_SENSOR        "gc2053"
 #define VVCAM_ISP_DEFAULT_SENSOR_MODE   0
 #define VVCAM_ISP_DEFAULT_SENSOR_XML    "/etc/vvcam/gc2093-1920x1080.xml"
 #define VVCAM_ISP_DEFAULT_SENSOR_MANU_JSON    "/etc/vvcam/gc2093-1920x1080_manual.json"
 #define VVCAM_ISP_DEFAULT_SENSOR_AUTO_JSON    "/etc/vvcam/gc2093-1920x1080_auto.json"
-
 #endif
+
+
 
 #endif
 
@@ -576,7 +583,7 @@ static int vvcam_isp_set_selection(struct v4l2_subdev *sd,
     crop_size.width = sel->r.width;
     crop_size.x = sel->r.left;
     crop_size.y = sel->r.top;
-    
+
     // printk("crop_size.height is %d crop_size.width is %d sel->pad is %d \n", crop_size.height, crop_size.width, sel->pad);
     // printk("crop_size.x is %d crop_size.y is %d \n", crop_size.x, crop_size.y);
 
