@@ -529,6 +529,8 @@ static int vvcam_videoc_g_fmt_vid_cap(struct file *file, void *fh,
         return ret;
     }
 
+    vvcam_vdev->format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+
     *f = vvcam_vdev->format;
 
     return 0;
