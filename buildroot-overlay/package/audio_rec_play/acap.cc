@@ -6,6 +6,9 @@
 #include <unistd.h>
 #include "audio_cfg.h"
 #include "audio_improvement.h"
+#include "webrtc_audio_improvement.h"
+
+#define USE_WEBRTC 1
 
 #define ENABLE_DEBUG_AUDIO 0
 static pthread_t capture_thread, play_thread;
@@ -41,7 +44,12 @@ static void* capture_thread_func(void* arg) {
         fwrite(pcm_capture_buf, 1, sizeof(pcm_capture_buf), pcm_mic_file);
 #endif
 
+#if USE_WEBRTC
+        webrtc_enhance_audio_quality(pcm_capture_buf,(short*)pcm_out_buf);
+#else
         enhance_audio_quality(pcm_capture_buf,(short*)pcm_out_buf);
+#endif
+
         fwrite(pcm_out_buf, 1, sizeof(pcm_out_buf), pcm_output_file);
     }
     printf("capture_thread_func end\n");
@@ -88,7 +96,12 @@ static void* play_thread_func(void* arg) {
         fwrite(pcm_paly_buf,1,sizeof(pcm_paly_buf),pcm_speaker_file);
 #endif
 
+#if USE_WEBRTC
+        webrtc_process_reference_audio(pcm_paly_buf,sizeof(pcm_paly_buf));
+#else
         process_reference_audio(pcm_paly_buf,sizeof(pcm_paly_buf));
+#endif
+
 
         // 播放 PCM 数据
         play_pcm(pcm_paly_buf);
@@ -105,7 +118,12 @@ static void* play_thread_func(void* arg) {
 }
 
 void acap_init() {
+#if USE_WEBRTC
+    webrtc_audio_quality_init(SAMPLE_RATE,CHANNELS_NUM);
+#else
     audio_quality_init(SAMPLE_RATE,BUFFER_SAMPLES,2000,false);
+#endif
+
     init_capture_pcm(SAMPLE_RATE, CHANNELS_NUM, BUFFER_SAMPLES, BITS_PER_SAMPLE);
     init_play_pcm(SAMPLE_RATE, CHANNELS_NUM, BUFFER_SAMPLES, BITS_PER_SAMPLE);
 }

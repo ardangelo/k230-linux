@@ -21,15 +21,17 @@ LIBS+=-lalure2
 LIBS+=-lasound
 LIBS+=-lspeexdsp
 LIBS+=-lpthread
+LIBS+=-lwebrtc-audio-processing-1
 INCS+=-I$(STAGING_DIR)/usr/include
+INCS+=-I$(STAGING_DIR)/usr/include/webrtc-audio-processing-1
 
-SRCS:=$(wildcard *.c)
-COBJS:=$(SRCS:.c=.o)
+SRCS:=$(wildcard *.cc)
+COBJS:=$(SRCS:.cc=.o)
 
 all:$(BIN)
 	@rm -f $(COBJS)
 
-$(COBJS) : %.o: %.c
+$(COBJS) : %.o: %.cc
 	$(CPP) -c $(CFLAGS) $< -o $@ $(INCS)
 
 $(BIN):$(COBJS)
