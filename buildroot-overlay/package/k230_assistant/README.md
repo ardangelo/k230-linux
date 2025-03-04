@@ -114,11 +114,9 @@ make CONF=k230_canmv_lckfb_defconfig
 ```
 ### 4.2 编译源码
 
-进入`k230_linux_sdk/buildroot-overlay/package/`目录，下载源码，**先编译库文件，再编译业务源码**：
+进入`k230_linux_sdk/buildroot-overlay/package/`目录，**先编译库文件，再编译业务源码**：
 
 ```shell
-git clone https://g.a-bug.org/wangyan01/k230_assistant.git
-
 # 进入库目录
 cd k230_assistant/libpeer
 
