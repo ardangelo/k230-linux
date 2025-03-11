@@ -11,7 +11,7 @@ pushd out
 cmake -DCMAKE_BUILD_TYPE=Release                \
 -DCMAKE_INSTALL_PREFIX=`pwd`               \
 -DCMAKE_C_COMPILER=/opt/toolchain/Xuantie-900-gcc-linux-6.6.0-glibc-x86_64-V2.10.1/bin/riscv64-unknown-linux-gnu-gcc \
--DCMAKE_CXX_COMPILER=/opt/toolchain/Xuantie-900-gcc-linux-6.6.0-glibc-x86_64-V2.10.1/bin/riscv64-unknown-linux-gnu-c++\
+-DCMAKE_CXX_COMPILER=/opt/toolchain/Xuantie-900-gcc-linux-6.6.0-glibc-x86_64-V2.10.1/bin/riscv64-unknown-linux-gnu-c++ \
 ..
 make -j && make install
 popd
