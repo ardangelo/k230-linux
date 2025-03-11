@@ -4,7 +4,7 @@ set(bin k230_assistant.elf)
 
 include_directories(.)
 
-include_directories(${sdk_root}/output/k230_canmv_defconfig/host/riscv64-buildroot-linux-gnu/sysroot/usr/include/webrtc-audio-processing-1)
+include_directories(${usr_root}/usr/include/webrtc-audio-processing-1)
 add_executable(${bin} ${src})
 target_link_libraries(${bin} -Wl,--start-group sharpyuv webp png z mmz pthread alure2 asound libopenal.so ssl crypto curl cjson cjson_utils opus absl_raw_logging_internal absl_log_severity absl_bad_optional_access absl_string_view absl_throw_delegate webrtc-audio-processing-1 -Wl,--end-group)
 
