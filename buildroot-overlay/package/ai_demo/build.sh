@@ -66,6 +66,7 @@ for subdir in $(ls -d */); do
             -DCMAKE_INSTALL_PREFIX=`pwd`               \
             -D$subdir_name=ON                        \
             -DCMAKE_C_COMPILER=/opt/toolchain/Xuantie-900-gcc-linux-6.6.0-glibc-x86_64-V2.10.1/bin/riscv64-unknown-linux-gnu-gcc \
+	    -DCMAKE_CXX_COMPILER=/opt/toolchain/Xuantie-900-gcc-linux-6.6.0-glibc-x86_64-V2.10.1/bin/riscv64-unknown-linux-gnu-c++\
             ..
             make -j && make install
             echo "******************$subdir_name 编译完成******************"
