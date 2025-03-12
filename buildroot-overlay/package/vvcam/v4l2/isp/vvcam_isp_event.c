@@ -291,3 +291,34 @@ int vvcam_isp_g_ctrl_event(struct vvcam_isp_dev *isp_dev,
     return ret;
 }
 
+int vvcam_isp_s_selection_event(struct vvcam_isp_dev *isp_dev,
+            int pad, struct vvcam_isp_crop_size *crop_size)
+{
+    struct vvcam_isp_event_pkg *event_pkg = isp_dev->event_shm.virt_addr;
+    int ret;
+    // struct vvcam_isp_ctrl *isp_ctrl;
+
+    mutex_lock(&isp_dev->event_shm.event_lock);
+
+    // isp_ctrl = (struct vvcam_isp_ctrl *)event_pkg->data;
+    // isp_ctrl->cid = ctrl->id;
+    // isp_ctrl->size = ctrl->elem_size * ctrl->elems;
+    // memcpy(isp_ctrl->data, ctrl->p_new.p_u8, isp_ctrl->size);
+
+    memcpy(event_pkg->data, crop_size, sizeof(struct vvcam_isp_crop_size));
+
+    event_pkg->head.pad = pad;
+    event_pkg->head.dev = isp_dev->id;
+    event_pkg->head.eid = VVCAM_ISP_EVENT_S_SELECTION;
+    event_pkg->head.shm_addr = isp_dev->event_shm.phy_addr;
+    event_pkg->head.shm_size = isp_dev->event_shm.size;
+    event_pkg->head.data_size = sizeof(crop_size);
+    event_pkg->ack = 0;
+    event_pkg->result = 0;
+
+    ret = vvcam_isp_post_event(&isp_dev->sd, event_pkg);
+
+    mutex_unlock(&isp_dev->event_shm.event_lock);
+
+    return ret;
+}

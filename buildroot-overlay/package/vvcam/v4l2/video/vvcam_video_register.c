@@ -529,6 +529,8 @@ static int vvcam_videoc_g_fmt_vid_cap(struct file *file, void *fh,
         return ret;
     }
 
+    vvcam_vdev->format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+
     *f = vvcam_vdev->format;
 
     return 0;
@@ -842,6 +844,94 @@ static int vvcam_videoc_subscribe_event(struct v4l2_fh *fh,
     return ret;
 }
 
+static int vvcam_videoc_g_selection(struct file *file, void *fh, struct v4l2_selection *sel)
+{
+    struct vvcam_video_dev *vvcam_vdev = video_drvdata(file);
+    struct media_pad *pad;
+    struct v4l2_subdev *subdev;
+    struct v4l2_subdev_format sd_fmt;
+    struct v4l2_subdev_pad_config pad_cfg;
+    struct v4l2_subdev_state sd_state = {
+        .pads = &pad_cfg,
+    };
+    int ret;
+
+    subdev = vvcam_video_remote_subdev(vvcam_vdev);
+    if (subdev) {
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
+        pad = media_pad_remote_pad_first(&vvcam_vdev->pad);
+#else
+        pad = media_entity_remote_pad(&vvcam_vdev->pad);
+#endif
+        memset(&sd_fmt, 0, sizeof(sd_fmt));
+        sd_fmt.pad = pad->index;
+        sd_fmt.which = V4L2_SUBDEV_FORMAT_TRY;
+
+        ret = v4l2_subdev_call(subdev, pad, get_fmt, &sd_state, &sd_fmt);
+        if (ret) {
+            printk("v4l2_subdev_call get_fmt failed \n");
+            return ret;
+        }
+            
+        sel->r.left = 0;
+        sel->r.top = 0;
+        sel->r.width = sd_fmt.format.width;
+        sel->r.height = sd_fmt.format.height;
+    }
+	return 0;
+}
+
+static int vvcam_videoc_s_selection(struct file *file, void *fh,struct v4l2_selection *sel)
+{
+	// struct rkisp1_isp *isp = to_rkisp1_isp(sd);
+
+    struct vvcam_video_dev *vvcam_vdev = video_drvdata(file);
+    struct media_pad *pad;
+    struct v4l2_subdev *subdev;
+    struct v4l2_subdev_pad_config pad_cfg;
+    struct v4l2_subdev_state sd_state = {
+        .pads = &pad_cfg,
+    };
+    int ret;
+
+    // printk("sel->r.left is %d sel->r.top is %d sel->r.width is %d sel->r.height is %d \n", sel->r.left, sel->r.top, sel->r.width, sel->r.height);
+
+    if (sel->target != V4L2_SEL_TGT_COMPOSE)
+    {
+        printk("%s sel target is not V4L2_SEL_TGT_COMPOSE  sel->target is %d \n",__func__, sel->target);
+        return -EINVAL;
+    }
+
+    printk("sel->target is %d \n", sel->target);
+
+    subdev = vvcam_video_remote_subdev(vvcam_vdev);
+    if (subdev) {
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
+        pad = media_pad_remote_pad_first(&vvcam_vdev->pad);
+#else
+        pad = media_entity_remote_pad(&vvcam_vdev->pad);
+#endif
+
+        struct v4l2_subdev_selection sdsel = {
+            .which = V4L2_SUBDEV_FORMAT_ACTIVE,
+            .target = sel->target,
+            .flags = sel->flags,
+            .pad = pad->index,
+            .r = sel->r,
+	    };
+		
+        ret = v4l2_subdev_call(subdev, pad, set_selection, &sd_state, &sdsel);
+        if (ret) {
+            printk("v4l2_subdev_call get_fmt failed \n");
+            return ret;
+        }
+    }
+	return ret;
+}
+
+
 static const struct v4l2_ioctl_ops vvcam_video_ioctl_ops = {
     .vidioc_querycap            = vvcam_videoc_querycap,
     .vidioc_enum_fmt_vid_cap    = vvcam_videoc_enum_fmt_vid_cap,
@@ -862,9 +952,9 @@ static const struct v4l2_ioctl_ops vvcam_video_ioctl_ops = {
     .vidioc_enum_input          = vvcam_videoc_enum_input,
     .vidioc_g_input             = vvcam_videoc_g_input,
     .vidioc_s_input             = vvcam_videoc_s_input,
-    /*.vidioc_g_selection         = vvcam_videoc_g_selection,
+    .vidioc_g_selection         = vvcam_videoc_g_selection,
     .vidioc_s_selection         = vvcam_videoc_s_selection,
-    .vidioc_g_parm              = vvcam_videoc_g_parm,
+ /*   .vidioc_g_parm              = vvcam_videoc_g_parm,
     .vidioc_s_parm              = vvcam_videoc_s_parm,
     .vidioc_enum_framesizes     = vvcam_videoc_enum_framesizes,
     .vidioc_enum_frameintervals = vvcam_videoc_enum_frmaeintervals,*/

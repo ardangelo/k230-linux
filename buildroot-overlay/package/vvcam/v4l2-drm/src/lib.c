@@ -119,6 +119,14 @@ int v4l2_drm_setup(struct v4l2_drm_context context[], unsigned num, struct displ
             fmtdesc.index += 1;
         }
 
+        // struct v4l2_crop crop;
+        // struct v4l2_cropcap cropcap;
+        // if (-1 == ioctl (context[i].video_fd, VIDIOC_CROPCAP, &cropcap)) {
+        //     perror ("VIDIOC_CROPCAP");
+        //     // exit (EXIT_FAILURE);
+        // }
+        // printf("--------------------cropcap.widt is %d ------------dadadadad ---------------------- \n", cropcap.bounds.width);
+
         struct v4l2_format format;
         format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
         CKE(ioctl(context[i].video_fd, VIDIOC_G_FMT, &format), close);
@@ -128,6 +136,66 @@ int v4l2_drm_setup(struct v4l2_drm_context context[], unsigned num, struct displ
         format.fmt.pix.height = context[i].height;
         CKE(ioctl(context[i].video_fd, VIDIOC_S_FMT, &format), close);
 
+        if((context[i].crop_size.height != 0) && (context[i].crop_size.width != 0) && 
+                (context[i].crop_size.height > context[i].height ) && (context[i].crop_size.width > context[i].width))
+        {
+            printf("set crop \n");
+#if 1
+            // set crop
+            struct v4l2_selection sel = {
+                .type = V4L2_BUF_TYPE_VIDEO_OUTPUT,
+                .target = V4L2_SEL_TGT_COMPOSE_BOUNDS,
+            };
+            struct v4l2_rect r;
+            int ret = 0;
+
+            ret = ioctl(context[i].video_fd, VIDIOC_G_SELECTION, &sel);
+            if(ret < 0)
+                printf("get VIDIOC_G_SELECTION err \n");
+
+            /* setting smaller compose rectangle */
+            r.width = context[i].crop_size.width;
+            r.height = context[i].crop_size.height;
+            r.left = context[i].crop_size.offset_x;
+            r.top = context[i].crop_size.offset_y;
+
+            sel.r = r;
+            sel.target = V4L2_SEL_TGT_COMPOSE;
+            sel.flags = V4L2_SEL_FLAG_LE;
+
+            ret = ioctl(context[i].video_fd, VIDIOC_S_SELECTION, &sel);
+            if(ret < 0)
+                printf("get VIDIOC_S_SELECTION err \n");
+#else 
+            struct v4l2_crop crop;
+            struct v4l2_cropcap cropcap;
+
+            memset (&cropcap, 0, sizeof (cropcap));
+            cropcap.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
+
+            if (-1 == ioctl (context[i].video_fd, VIDIOC_CROPCAP, &cropcap)) {
+                perror ("VIDIOC_CROPCAP");   
+            }
+
+            memset (&crop, 0, sizeof (crop));
+            crop.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
+            crop.c = cropcap.defrect;
+
+            crop.c.width = context[i].crop_size.width;
+            crop.c.height = context[i].crop_size.height;
+            crop.c.left = context[i].crop_size.offset_x;
+            crop.c.top = context[i].crop_size.offset_y;
+
+            /* Ignore if cropping is not supported (EINVAL). */
+
+            if (-1 == ioctl (context[i].video_fd, VIDIOC_S_CROP, &crop)
+                && errno != EINVAL) {
+                perror ("VIDIOC_S_CROP");
+            }
+            printf("set crop crop.c.height is %d \n", crop.c.height);
+#endif
+        }
+        
         struct v4l2_requestbuffers request_buffer;
         memset(&request_buffer, 0, sizeof(request_buffer));
         request_buffer.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;

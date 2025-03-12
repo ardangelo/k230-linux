@@ -5,3 +5,7 @@ config BR2_PACKAGE_VVCAM
     select BR2_PACKAGE_DISPLAY
     help
         K230 ISP server
+
+config BR2_PACKAGE_VVCAM_DEF_SENSOR
+    string "default sensor"
+    default "ov5647"
