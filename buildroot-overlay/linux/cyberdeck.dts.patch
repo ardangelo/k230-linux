@@ -1,9 +1,9 @@
 diff --git a/arch/riscv/boot/dts/canaan/cyberdeck.dts b/arch/riscv/boot/dts/canaan/cyberdeck.dts
 new file mode 100644
-index 0000000..8059cb5
+index 0000000..08ae40e
 --- /dev/null
 +++ b/arch/riscv/boot/dts/canaan/cyberdeck.dts
-@@ -0,0 +1,138 @@
+@@ -0,0 +1,135 @@
 +// SPDX-License-Identifier: GPL-2.0 OR MIT
 +/*
 + * Copyright (C) 2024 Yangyu Chen <cyy@cyyself.name>
@@ -50,7 +50,13 @@ index 0000000..8059cb5
 +&uart0 {
 +	status = "okay";
 +};
++&uart1 {
++	status = "okay";
++};
 +&uart3 {
++	status = "okay";
++};
++&uart4 {
 +	status = "okay";
 +};
 +&mmc_sd0{
@@ -112,31 +118,22 @@ index 0000000..8059cb5
 +
 +&spi0 {
 +    compatible = "canaan,k230-spi";
-+    interrupt-parent = <&plic>;
-+    interrupts = <146 IRQ_TYPE_LEVEL_HIGH>,
-+                 <147 IRQ_TYPE_LEVEL_HIGH>,
-+                 <148 IRQ_TYPE_LEVEL_HIGH>,
-+                 <149 IRQ_TYPE_LEVEL_HIGH>,
-+                 <150 IRQ_TYPE_LEVEL_HIGH>,
-+                 <151 IRQ_TYPE_LEVEL_HIGH>,
-+                 <152 IRQ_TYPE_LEVEL_HIGH>,
-+                 <153 IRQ_TYPE_LEVEL_HIGH>,
-+                 <154 IRQ_TYPE_LEVEL_HIGH>;
 +    status = "okay";
 +
 +    spidev0: spidev@0 {
-+        compatible = "rohm,dh2228fv"
++        compatible = "rohm,dh2228fv";
 +        reg = <0>;
 +        spi-max-frequency = <4000000>;
 +        status = "okay";
 +    };
 +};
 +
-+&spi1 {
-+    status = "okay";
++&spi2 {
 +    compatible = "canaan,k230-spi";
++    status = "okay";
++
 +    spidev1: spidev@0 {
-+        compatible = "spidev";
++        compatible = "rohm,dh2228fv";
 +        reg = <0>;
 +        spi-max-frequency = <4000000>;
 +        status = "okay";
