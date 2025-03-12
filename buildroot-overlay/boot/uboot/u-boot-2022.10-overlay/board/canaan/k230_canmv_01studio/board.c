@@ -25,7 +25,7 @@
 #include <platform.h>
 #include "../common/k230_board_common.h"
 
-
+#define AIC8800
 
 sysctl_boot_mode_e sysctl_boot_get_boot_mode(void)
 {
@@ -35,6 +35,7 @@ sysctl_boot_mode_e sysctl_boot_get_boot_mode(void)
 #ifdef CONFIG_BOARD_LATE_INIT
 int board_late_init(void)
 {
+#ifndef AIC8800
     #define USB_IDPULLUP0 		(1<<4)
     #define USB_DMPULLDOWN0 	(1<<8)
     #define USB_DPPULLDOWN0 	(1<<9)
@@ -52,8 +53,23 @@ int board_late_init(void)
 	usb_ctl3 |= USB_IDPULLUP0;
 	usb_ctl3 |= (USB_DMPULLDOWN0 | USB_DPPULLDOWN0);
 	writel(usb_ctl3, ( volatile void __iomem *)(SDIO0_BASE_ADDR + 0x9c));
-
+#endif
 	env_set_ulong("mmc_boot_dev_num", g_bootmod - SYSCTL_BOOT_SDIO0);
+
+#ifdef AIC8800
+	u32 wifi_regon_gpio1_dir = readl((void*)(GPIO_BASE_ADDR1 + 0x4));
+	wifi_regon_gpio1_dir |= 1 << 21;
+	writel(wifi_regon_gpio1_dir, (void*)(GPIO_BASE_ADDR1 + 0x4));
+
+	// reset gpio1 -> WIFI REGON
+	u32 wifi_regon_gpio1_data = readl((void*)(GPIO_BASE_ADDR1 + 0x0));
+	wifi_regon_gpio1_data &= ~(1 << 21);
+	writel(wifi_regon_gpio1_data, (void*)(GPIO_BASE_ADDR1 + 0x0));
+	mdelay(50);
+	// reset gpio1 -> WIFI REGON
+	wifi_regon_gpio1_data |= 1 << 21;
+	writel(wifi_regon_gpio1_data, (void*)(GPIO_BASE_ADDR1 + 0x0));
+#endif
 
 	//printf("usb_ctl3 =%x\n",usb_ctl3);
     return 0;
