@@ -2861,4 +2861,8 @@ menu "canaan package"
 	source "package/helloworld_cmake/Config.in"
 endmenu
 
+menu "Cyberdeck"
+	source "package/sharp-drm/Config.in"
+endmenu
+
 endmenu
