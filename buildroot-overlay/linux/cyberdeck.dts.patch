@@ -1,9 +1,9 @@
 diff --git a/arch/riscv/boot/dts/canaan/cyberdeck.dts b/arch/riscv/boot/dts/canaan/cyberdeck.dts
 new file mode 100644
-index 000000000..1d3caf867
+index 000000000..6ae6c638a
 --- /dev/null
 +++ b/arch/riscv/boot/dts/canaan/cyberdeck.dts
-@@ -0,0 +1,140 @@
+@@ -0,0 +1,143 @@
 +// SPDX-License-Identifier: GPL-2.0 OR MIT
 +/*
 + * Copyright (C) 2024 Yangyu Chen <cyy@cyyself.name>
@@ -119,20 +119,22 @@ index 000000000..1d3caf867
 +&spi0 {
 +    compatible = "canaan,k230-spi";
 +    status = "okay";
++    cs-gpios = <&gpio0_ports 14 GPIO_ACTIVE_HIGH>;
 +
 +    sharp_drm: sharp_drm@0 {
 +        compatible = "sharp-drm";
++        //reg = <0x0 0x91584000 0x0 0x1000>;
 +        reg = <0>;
-+        disp-gpios = <&gpio0_ports 18 0>;
-+        cs-gpios = <&gpio0_ports 14 0>;
 +
-+        spi-cs-high = <1>;
++        disp-gpios = <&gpio0_ports 18 0>;
++
++        spi-cs-high = <0>;
 +        spi-max-frequency = <4000000>;
 +        buswidth = <8>;
-+        debug = <0>;
 +    };
 +};
 +
++/*
 +&spi2 {
 +    compatible = "canaan,k230-spi";
 +    status = "okay";
@@ -144,3 +146,4 @@ index 000000000..1d3caf867
 +        status = "okay";
 +    };
 +};
++*/
