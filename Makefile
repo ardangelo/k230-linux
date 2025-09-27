@@ -1,5 +1,5 @@
 SHELL=/bin/bash
-BR_NAME = buildroot-2024.02.1
+BR_NAME = buildroot-2025.02.1
 BR_SRC_DIR = output/$(BR_NAME)
 BR_OVERLAY_DIR = buildroot-overlay
 
@@ -15,8 +15,12 @@ BRW_BUILD_DIR = $(CURDIR)/output/$(CONF)
 .PHONY: all buildroot  debian ubuntu openouler  ruyi  debian_rootfs ubuntu_rootfs
 all :  buildroot
 
-debian ubuntu openouler debian_rootfs ubuntu_rootfs : sync
-	@$(BR_SRC_DIR)/board/canaan/k230-soc/distribution.sh  $@  $(BRW_BUILD_DIR)
+debian ubuntu openouler debian_rootfs ubuntu_rootfs : sync  buildroot
+	@$(BR_SRC_DIR)/board/canaan/k230-soc/distribution/distribution.sh  $@  $(BRW_BUILD_DIR)
+
+ddr_test_img_% :sync buildroot ###128/512/1024/2048
+	@echo "build ddr test img ,ddr size: $*"
+	@tools/ddr_test_img.sh  $*
 
 buildroot: $(BRW_BUILD_DIR)/.config
 	make -C $(BRW_BUILD_DIR) all
@@ -25,6 +29,10 @@ buildroot: $(BRW_BUILD_DIR)/.config
 dl:   $(BRW_BUILD_DIR)/.config
 	echo "download all source"
 	make -C $(BRW_BUILD_DIR) source
+
+.PHONY:toolchain_and_depend
+toolchain_and_depend:
+	@tools/install_toolchain_and_depend.sh
 
 .PHONY:help
 help:sync
@@ -37,6 +45,8 @@ help:sync
 	@echo "    make uboot-dirclean #uboot clean"
 	@echo "    make linux-rebuild  #rebuild linux"
 	@echo "    make linux-dirclean #linux clean"
+	@echo "    make toolchain_and_depend #install toolchain and depend package"
+	@echo "    make ddr_test_img_128 #build ddr 128MB test img,128 can be 512/1024/2048/128"
 	@echo "    make list_def      #show support config,and current use config"
 	@echo ""
 	@echo "dcoker build and run example:"
@@ -69,16 +79,12 @@ list_def:
 
 
 
-
-
-
-
-
 .PHONY:sync
 sync:
 	make -f tools/sync.mk sync   BR_SRC_DIR=$(BR_SRC_DIR)  BR_OVERLAY_DIR=$(BR_OVERLAY_DIR)  BR_NAME=$(BR_NAME)
 
-this-makefile := $(lastword $(MAKEFILE_LIST))  all dl help  savedefconfig  sync  %_defconfig   debian ubuntu openouler  debian_rootfs ubuntu_rootfs list_def
+this-makefile := $(lastword $(MAKEFILE_LIST))  all dl help  savedefconfig  sync  %_defconfig  \
+				 debian ubuntu openouler  debian_rootfs ubuntu_rootfs list_def  toolchain_and_depend  ddr_test_img_%
 $(filter-out $(this-makefile) , $(MAKECMDGOALS)):	$(BRW_BUILD_DIR)/.config
 	[ -d $(BRW_BUILD_DIR) ] && make -C $(BRW_BUILD_DIR) $@
 	@( if [ $@ = linux-savedefconfig ];then \
@@ -89,13 +95,14 @@ $(filter-out $(this-makefile) , $(MAKECMDGOALS)):	$(BRW_BUILD_DIR)/.config
 
 %_defconfig:  sync
 	echo CONF=$@ >.last_conf
-	CONF=$@ make -C $(BR_SRC_DIR) $(CONF) O=$(BRW_BUILD_DIR)
+	make -C $(BR_SRC_DIR) $@  O=$(CURDIR)/output/$@
 
 savedefconfig:  $(BRW_BUILD_DIR)/.config
 	make -C $(BRW_BUILD_DIR) $@
 	cp $(BR_SRC_DIR)/configs/$(CONF) $(BR_OVERLAY_DIR)/configs/
 
 $(BRW_BUILD_DIR)/.config: sync
+	mkdir -p $(BRW_BUILD_DIR)/images/deb
 ifeq ("$(origin CONF)", "command line")
 	make -C $(BR_SRC_DIR) $(CONF) O=$(BRW_BUILD_DIR)
 	touch $@

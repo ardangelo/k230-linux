@@ -1,7 +1,6 @@
 #!/bin/bash
 set -e
-
-
+BUILDROOT_PATH=$(pwd)
 #BINARIES_DIR=/home/wangjianxin/k230_linux_sdk/output/k230_canmv_defconfig/images
 UBOOT_BUILD_DIR=${BUILD_DIR}/uboot-2022.10
 K230_SDK_ROOT=$(dirname $(dirname ${BASE_DIR}))
@@ -27,9 +26,17 @@ gz_file_add_ver()
 	local storage="$(echo "$f" | sed -nE "s#[^-]*-([^\.]*).*#\1#p")"
 
 	if [ "${CONF}" = "k230_canmv_defconfig" ] ; then
-		canaan_site_name="CanMV-K230";
+		canaan_site_name="CanMV-K230_V1P0_P1";
 	elif [ "${CONF}" = "k230_evb_defconfig" ] ; then
 		canaan_site_name="EVB-K230";
+	elif [ "${CONF}" = "k230_canmv_01studio_defconfig" ] ; then
+		canaan_site_name="CanMV-K230_01studio";
+	elif [ "${CONF}" = "k230_canmv_lckfb_defconfig" ] ; then
+		canaan_site_name="CanMV-K230_LCKFB";
+	elif [ "${CONF}" = "k230_canmv_v3_defconfig" ] ; then
+		canaan_site_name="CanMV-K230_V3P0";
+	elif [ "${CONF}" = "k230d_canmv_defconfig" ] ; then
+		canaan_site_name="CanMV-K230D";
 	else
 		canaan_site_name="${CONF%%_defconfig}"	;
 	fi
@@ -229,22 +236,32 @@ gen_env_bin()
 gen_boot_ext4()
 {
 	local first_dtb="$(grep BR2_LINUX_KERNEL_INTREE_DTS_NAME ${BR2_CONFIG} | cut -d / -f2 | tr -d '"' |  cut -d ' ' -f1).dtb"
+	local logo=$(grep CONFIG_K230_BARE_DISP_LOGO_PATH ${UBOOT_BUILD_DIR}/.config  | cut -d '"' -f2 |  sed 's/\.png$/.yuv/')
+
+
+
 	echo "${first_dtb}"
 	cd  "${BINARIES_DIR}/";
-	rm boot; mkdir -p boot;
+	rm -rf boot; mkdir -p boot;
 
 	cp ${K230_SDK_ROOT}/buildroot-overlay/board/canaan/k230-soc/rootfs_overlay/boot/nuttx-7000000-uart2.bin  boot/;
 	cp Image boot/;
 	[ ! -f "Image_ilp32" ] ||  cp Image_ilp32 boot/;
 	cp *.dtb boot;
+	[ -z "${logo}" ]  ||  cp ${BUILDROOT_PATH}/${logo} boot/logo.yuv;
 	cd boot; rm -rf k.dtb;ln -s ${first_dtb} k.dtb; cd -;
 	${UBOOT_BUILD_DIR}/tools/mkimage -A riscv -O linux -T kernel -C none -a 0 -e 0 -n linux -d ${BINARIES_DIR}/fw_jump.bin  boot/fw_jump_add_uboot_head.bin
 	rm -rf boot.ext4 ;fakeroot mkfs.ext4 -d boot  -r 1 -N 0 -m 1 -L "boot" -O ^64bit boot.ext4 80M
 }
-
+gen_deb_packages_gz()
+{
+	cd  "${BINARIES_DIR}/deb/";
+	rm -rf  Packages.gz;dpkg-scanpackages . /dev/null | gzip -9c > Packages.gz
+	cd -;
+}
 gen_uboot_bin
 gen_env_bin
 #gen_linux_bin;
 gen_boot_ext4
-
+#gen_deb_packages_gz
 gen_image ${GENIMAGE_CFG_SD}   sysimage-sdcard.img
