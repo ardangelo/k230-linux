@@ -3,7 +3,7 @@ new file mode 100644
 index 000000000..6ae6c638a
 --- /dev/null
 +++ b/arch/riscv/boot/dts/canaan/cyberdeck.dts
-@@ -0,0 +1,143 @@
+@@ -0,0 +1,142 @@
 +// SPDX-License-Identifier: GPL-2.0 OR MIT
 +/*
 + * Copyright (C) 2024 Yangyu Chen <cyy@cyyself.name>
@@ -21,6 +21,7 @@ index 000000000..6ae6c638a
 +		i2c1 = &i2c3;
 +		mmc0 = &mmc_sd0;
 +		mmc1 = &mmc_sd1;
++               spi2 = &spi2;
 +	};
 +
 +	chosen {
@@ -134,16 +135,14 @@ index 000000000..6ae6c638a
 +    };
 +};
 +
-+/*
 +&spi2 {
 +    compatible = "canaan,k230-spi";
 +    status = "okay";
 +
 +    spidev1: spidev@0 {
-+        compatible = "rohm,dh2228fv";
++        compatible = "linux,spidev";
 +        reg = <0>;
 +        spi-max-frequency = <4000000>;
 +        status = "okay";
 +    };
 +};
-+*/

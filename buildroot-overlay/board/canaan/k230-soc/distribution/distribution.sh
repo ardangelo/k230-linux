@@ -231,7 +231,7 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1;
 fi
 apt-get update ;
-apt-get install parted curl -y;
+apt-get install parted curl spi-tools -y;
 
 if $(curl --output /dev/null --silent --head --fail https://ai.b-bug.org/k230/downloads/dl/distribution ) ;then
 DISTR_DOWN_URI="https://ai.b-bug.org/k230/downloads/dl/distribution"
