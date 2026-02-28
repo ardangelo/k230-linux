@@ -17,7 +17,7 @@ $(BR_OVERLAY_FS)  $(UBOOT_OVERLAY_FS) :
 	@:
 $(BR_SRC_DIR)/.download_extract:
 	@mkdir -p output  $(dir $(BR_SRC_DIR)) dl
-	@BUILD_DIR=$(CURDIR)/output/ ./tools/download/dl-wrapper  -f $(BR_TAR_NAME)  -o  dl/$(BR_TAR_NAME) $(BR_SITES_FOR_DL) --
+	@BUILD_DIR=$(CURDIR)/output/ ./tools/download/dl-wrapper  -f $(BR_TAR_NAME) -H tools/download/buildroot.hash -o  dl/$(BR_TAR_NAME) $(BR_SITES_FOR_DL)  --
 	@rm -rf $(BR_SRC_DIR)/ ; tar -xf dl/$(BR_TAR_NAME) -C $(dir $(BR_SRC_DIR))  ;   rm -rf $(BR_SRC_DIR)/package/python3;  rm -rf $(BR_SRC_DIR)/package/ffmpeg;
 	@touch $@
 
@@ -32,9 +32,9 @@ output/.uboot_overlay_sync:$(UBOOT_OVERLAY_FS)
 # output/.linux_overlay_sync:$(LINUX_OVERLAY_FS)
 # 	mkdir -p $(@D);touch $@
 
-output/.oepnsbi_overlay_sync:$(OPENSBI_OVERLAY_FS)
+output/.opensbi_overlay_sync:$(OPENSBI_OVERLAY_FS)
 	mkdir -p $(@D);touch $@
 
 .PHONY:sync
-sync :$(BR_SRC_DIR)/.overlay_sync  output/.uboot_overlay_sync  output/.oepnsbi_overlay_sync
+sync :$(BR_SRC_DIR)/.overlay_sync  output/.uboot_overlay_sync  output/.opensbi_overlay_sync
 	@:

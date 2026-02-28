@@ -175,7 +175,7 @@ distribution_rootfs_replace()
     rm -rf ${distr_rootfs};tar -xf ${distr_rootfs}.tar.gz
     cp ${BINARIES_DIR}/../target/lib/modules ${distr_rootfs}/lib -r;
     cp ${BINARIES_DIR}/../target/bin/sta.sh ${distr_rootfs}/bin ;
-    cp ${BINARIES_DIR}/../target/bin/adb.sh ${distr_rootfs}/bin ;
+    #cp ${BINARIES_DIR}/../target/bin/adb.sh ${distr_rootfs}/bin ;
     cat  ${BINARIES_DIR}/../target/etc/version/release_version   >> ${distr_rootfs}/etc/issue ;
     {
         wget -c -r -np -nc -k -nd  -A "*.deb" -P  ${BINARIES_DIR}/deb/  ${DISTR_DOWN_URI}/deb/
@@ -187,6 +187,15 @@ distribution_rootfs_replace()
         cd  ${distr_rootfs}/etc/systemd/system/basic.target.wants/;   ln -s  /etc/systemd/system/vvcam.service   vvcam.service;   cd -;
         #rsync -a --ignore-times  --chmod=u=rwX,go=rX --exclude .empty --exclude '*~' t/   ${distr_rootfs}/
     }
+
+    cp ${BINARIES_DIR}/../target/usr/lib/libjpeg.so.9  -fL ${distr_rootfs}/usr/lib/riscv64-linux-gnu/ ;
+    cp ${BINARIES_DIR}/../target/usr/lib/libcrypt.so.2  -rfL ${distr_rootfs}/usr/lib/riscv64-linux-gnu/ ;
+
+    cp ${BINARIES_DIR}/../target/etc/init.d/S99adb_mtp -rf ${distr_rootfs}/etc/vvcam/S99adb_mtp;
+    cp ${BINARIES_DIR}/../target/etc/umtprd  -rf ${distr_rootfs}/etc/;
+    cp ${BINARIES_DIR}/../target/usr/sbin/umtprd  -rf ${distr_rootfs}/usr/sbin/;
+    cp ${BINARIES_DIR}/../target/usr/bin/adbd  -rf ${distr_rootfs}/usr/bin/;
+    cd ${distr_rootfs}; rm -rf app ; ln -s root/app app; cd -;
 
 
     { # generate ${distr_rootfs}.ext4

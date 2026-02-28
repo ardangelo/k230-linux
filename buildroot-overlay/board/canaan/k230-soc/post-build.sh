@@ -65,6 +65,9 @@ auto_boot_proc()
 [ "\$1" = "stop" ] && exit 0
 
 EOF
+	BR2_CANAAN_AUTO_RUN_CMD=$(cat ${config} | grep BR2_CANAAN_AUTO_RUN_CMD | cut -d= -f2  |  tr -d '"' )
+
+
 
 	if  $(cat ${config} |  grep  BR2_PACKAGE_RTL8189FS=y >/dev/null 2>&1 ); then
 		echo " modprobe 8189fs " >> ${auto_boot_f}
@@ -74,12 +77,21 @@ EOF
 		echo " modprobe bcmdhd " >> ${auto_boot_f}
 	fi
 
+	if  $(cat ${config} |  grep  BR2_PACKAGE_RTL8733BS=y >/dev/null 2>&1 ); then
+		echo " modprobe 8733bs " >> ${auto_boot_f} #rtw_drv_log_level=3
+	fi
+
 
 	if  $(cat ${config} |  grep  BR2_PACKAGE_AIC8800=y >/dev/null 2>&1 ); then
 		echo " modprobe aic_load_fw " >> ${auto_boot_f}
 		echo " modprobe aic8800_fdrv " >> ${auto_boot_f}
 		echo " modprobe aic_btusb " >> ${auto_boot_f}
 	fi
+
+	if [ ! -z "$BR2_CANAAN_AUTO_RUN_CMD" ] ; then
+		echo  "$BR2_CANAAN_AUTO_RUN_CMD" >> ${auto_boot_f}
+	fi
+
 	chmod a+x ${auto_boot_f}
 }
 gen_version

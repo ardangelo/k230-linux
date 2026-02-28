@@ -54,6 +54,7 @@ int board_late_init(void)
 	usb_ctl3 |= (USB_DMPULLDOWN0 | USB_DPPULLDOWN0);
 	writel(usb_ctl3, ( volatile void __iomem *)(SDIO0_BASE_ADDR + 0x9c));
 #endif
+	wifi_gpio_rst(53);
 	env_set_ulong("mmc_boot_dev_num", g_bootmod - SYSCTL_BOOT_SDIO0);
 
 #ifdef AIC8800

@@ -6,7 +6,14 @@ compile_commands.json
 /test
 /linux
 /buildroot-overlay/board/canaan/k230-soc/rootfs_overlay/etc/version/release_version
-.clangd
 buildroot-overlay/package/ai_demo/kmodel
 buildroot-overlay/package/ai_demo/k230_bin
 buildroot-overlay/package/ai_demo/out
+buildroot-overlay/package/face_detect/k230_bin
+buildroot-overlay/package/yolo/k230_bin
+buildroot-overlay/package/cloudplat_deploy_code_linux/k230_bin
+GPATH
+GRTAGS
+GTAGS
+gtags.files
+df/
