@@ -172,7 +172,7 @@ distribution_rootfs_replace()
 
     [ "${md5_v}" = "$(md5sum ${distr_rootfs}.tar.gz | cut -d' ' -f1 )" ]  || (print_red " ${distr_rootfs}.tar.gz error !" ;exit 1)
 
-    rm -rf ${distr_rootfs};tar -xf ${distr_rootfs}.tar.gz
+    rm -rf ${distr_rootfs};tar --no-same-owner --exclude='*/dev/*' -xf ${distr_rootfs}.tar.gz
     cp ${BINARIES_DIR}/../target/lib/modules ${distr_rootfs}/lib -r;
     cp ${BINARIES_DIR}/../target/bin/sta.sh ${distr_rootfs}/bin ;
     #cp ${BINARIES_DIR}/../target/bin/adb.sh ${distr_rootfs}/bin ;

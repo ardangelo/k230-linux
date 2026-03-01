@@ -33,7 +33,7 @@ ddr_test_img_% :sync buildroot ###128/512/1024/2048
 	@tools/ddr_test_img.sh  $*
 
 buildroot: $(BRW_BUILD_DIR)/.config
-	make -C $(BRW_BUILD_DIR) all   BR2_PRIMARY_SITE=$(BR2_PRIMARY_SITE)
+	make -C $(BRW_BUILD_DIR) all   BR2_PRIMARY_SITE=$(BR2_PRIMARY_SITE) BR2_TAR_OPTIONS=$(BR2_TAR_OPTIONS)
 
 .PHONY:dl
 dl:   $(BRW_BUILD_DIR)/.config
@@ -97,7 +97,7 @@ sync:
 this-makefile := $(lastword $(MAKEFILE_LIST))  all dl help  savedefconfig  sync  %_defconfig  \
 				 debian ubuntu openouler  debian_rootfs ubuntu_rootfs list_def  toolchain_and_depend buildroot  ddr_test_img_%
 $(filter-out $(this-makefile) , $(MAKECMDGOALS)):	$(BRW_BUILD_DIR)/.config
-	[ -d $(BRW_BUILD_DIR) ] && make -C $(BRW_BUILD_DIR) $@ BR2_PRIMARY_SITE=$(BR2_PRIMARY_SITE)
+	[ -d $(BRW_BUILD_DIR) ] && make -C $(BRW_BUILD_DIR) $@ BR2_PRIMARY_SITE=$(BR2_PRIMARY_SITE) BR2_TAR_OPTIONS=$(BR2_TAR_OPTIONS)
 	@( if [ $@ = linux-savedefconfig ];then \
 		lr="$$(make printvars VARS='LINUX_DIR' | grep LINUX_DIR  | cut -d= -f2 )";\
 		cp $${lr}/defconfig $${lr}/arch/riscv/configs/k230_defconfig ; \
