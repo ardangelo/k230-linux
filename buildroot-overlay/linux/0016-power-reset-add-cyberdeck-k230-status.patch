@@ -1,0 +1,216 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Cyberdeck Maintainers <maintainers@cyberdeck.local>
+Date: Thu, 9 Jul 2026 00:00:00 +0000
+Subject: [PATCH] power: reset: add Cyberdeck K230 status handshake
+
+Add a board-specific status GPIO driver for the Cyberdeck K230.  The
+status GPIO is held low from probe, may be raised by userspace once the
+system is ready, and is driven low again from both poweroff prepare and
+final poweroff sys-off handlers.
+---
+ drivers/power/reset/Kconfig                 |  10 ++
+ drivers/power/reset/Makefile                |   1 +
+ drivers/power/reset/cyberdeck-k230-status.c | 161 +++++++++++++++++++
+ 3 files changed, 172 insertions(+)
+ create mode 100644 drivers/power/reset/cyberdeck-k230-status.c
+
+diff --git a/drivers/power/reset/Kconfig b/drivers/power/reset/Kconfig
+index 703b4f9d3047..1f30a9b5a2b4 100644
+--- a/drivers/power/reset/Kconfig
++++ b/drivers/power/reset/Kconfig
+@@ -100,6 +100,16 @@
+ 	  If your board needs a GPIO high/low to restart, say Y and
+ 	  create a binding in your devicetree.
+ 
++config CYBERDECK_K230_STATUS
++	bool "Cyberdeck K230 status/poweroff handshake"
++	depends on OF_GPIO || COMPILE_TEST
++	help
++	  This driver keeps the K230_STATUS GPIO requested for the whole boot.
++	  Userspace can raise the line by writing the ready sysfs attribute once
++	  Linux is ready.  During poweroff the driver lowers the line so the nRF
++	  controller can remove K230 power through K230_PW_EN.  Say Y for
++	  Cyberdeck K230 boards with the matching devicetree node.
++
+ config POWER_RESET_HISI
+ 	bool "Hisilicon power-off driver"
+ 	depends on ARCH_HISI
+diff --git a/drivers/power/reset/Makefile b/drivers/power/reset/Makefile
+index 7bb6d6fd21d8..c182b0967402 100644
+--- a/drivers/power/reset/Makefile
++++ b/drivers/power/reset/Makefile
+@@ -10,6 +10,7 @@
+ obj-$(CONFIG_POWER_RESET_GEMINI_POWEROFF) += gemini-poweroff.o
+ obj-$(CONFIG_POWER_RESET_GPIO) += gpio-poweroff.o
+ obj-$(CONFIG_POWER_RESET_GPIO_RESTART) += gpio-restart.o
++obj-$(CONFIG_CYBERDECK_K230_STATUS) += cyberdeck-k230-status.o
+ obj-$(CONFIG_POWER_RESET_HISI) += hisi-reboot.o
+ obj-$(CONFIG_POWER_RESET_LINKSTATION) += linkstation-poweroff.o
+ obj-$(CONFIG_POWER_RESET_MSM) += msm-poweroff.o
+diff --git a/drivers/power/reset/cyberdeck-k230-status.c b/drivers/power/reset/cyberdeck-k230-status.c
+new file mode 100644
+index 000000000000..0a7de9b0413b
+--- /dev/null
++++ b/drivers/power/reset/cyberdeck-k230-status.c
+@@ -0,0 +1,161 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Cyberdeck K230 status / poweroff handshake driver.
++ *
++ * GPIO25 (K230_STATUS) is held by Linux for the whole boot.  Userspace may
++ * raise it through the ready sysfs attribute once the application stack is
++ * ready.  During poweroff Linux lowers it so the nRF can drop K230_PW_EN.
++ */
++
++#include <linux/delay.h>
++#include <linux/device.h>
++#include <linux/err.h>
++#include <linux/gfp.h>
++#include <linux/gpio/consumer.h>
++#include <linux/init.h>
++#include <linux/kstrtox.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/platform_device.h>
++#include <linux/reboot.h>
++#include <linux/sysfs.h>
++
++struct cyberdeck_k230_status {
++	struct gpio_desc *status_gpio;
++	bool ready;
++};
++
++static ssize_t ready_show(struct device *dev, struct device_attribute *attr,
++				 char *buf)
++{
++	struct cyberdeck_k230_status *ks = dev_get_drvdata(dev);
++
++	return sysfs_emit(buf, "%u\n", READ_ONCE(ks->ready));
++}
++
++static ssize_t ready_store(struct device *dev, struct device_attribute *attr,
++				  const char *buf, size_t count)
++{
++	struct cyberdeck_k230_status *ks = dev_get_drvdata(dev);
++	bool ready;
++	int ret;
++
++	ret = kstrtobool(buf, &ready);
++	if (ret)
++		return ret;
++
++	WRITE_ONCE(ks->ready, ready);
++	gpiod_set_value_cansleep(ks->status_gpio, ready);
++
++	return count;
++}
++static DEVICE_ATTR_RW(ready);
++
++static struct attribute *cyberdeck_k230_status_attrs[] = {
++	&dev_attr_ready.attr,
++	NULL,
++};
++
++static const struct attribute_group cyberdeck_k230_status_group = {
++	.attrs = cyberdeck_k230_status_attrs,
++};
++
++static int cyberdeck_k230_status_poweroff_prepare(struct sys_off_data *data)
++{
++	struct cyberdeck_k230_status *ks = data->cb_data;
++
++	WRITE_ONCE(ks->ready, false);
++	gpiod_set_value_cansleep(ks->status_gpio, 0);
++	msleep(50);
++
++	return NOTIFY_DONE;
++}
++
++static int cyberdeck_k230_status_poweroff(struct sys_off_data *data)
++{
++	struct cyberdeck_k230_status *ks = data->cb_data;
++
++	if (!gpiod_cansleep(ks->status_gpio))
++		gpiod_set_value(ks->status_gpio, 0);
++
++	return NOTIFY_DONE;
++}
++
++static int cyberdeck_k230_status_probe(struct platform_device *pdev)
++{
++	struct device *dev = &pdev->dev;
++	struct cyberdeck_k230_status *ks;
++	int ret;
++
++	ks = devm_kzalloc(dev, sizeof(*ks), GFP_KERNEL);
++	if (!ks)
++		return -ENOMEM;
++
++	ks->status_gpio = devm_gpiod_get(dev, "status", GPIOD_OUT_LOW);
++	if (IS_ERR(ks->status_gpio))
++		return dev_err_probe(dev, PTR_ERR(ks->status_gpio),
++				     "failed to request status GPIO\n");
++
++	ret = gpiod_set_consumer_name(ks->status_gpio, "K230_STATUS");
++	if (ret)
++		return dev_err_probe(dev, ret,
++				     "failed to set status GPIO consumer name\n");
++
++	WRITE_ONCE(ks->ready, false);
++	gpiod_set_value_cansleep(ks->status_gpio, 0);
++	platform_set_drvdata(pdev, ks);
++
++	ret = devm_device_add_group(dev, &cyberdeck_k230_status_group);
++	if (ret)
++		return dev_err_probe(dev, ret, "failed to create sysfs group\n");
++
++	ret = devm_register_sys_off_handler(dev,
++					    SYS_OFF_MODE_POWER_OFF_PREPARE,
++					    SYS_OFF_PRIO_DEFAULT,
++					    cyberdeck_k230_status_poweroff_prepare,
++					    ks);
++	if (ret)
++		return dev_err_probe(dev, ret,
++				     "failed to register poweroff prepare handler\n");
++
++	ret = devm_register_sys_off_handler(dev,
++					    SYS_OFF_MODE_POWER_OFF,
++					    SYS_OFF_PRIO_PLATFORM,
++					    cyberdeck_k230_status_poweroff,
++					    ks);
++	if (ret == -EBUSY) {
++		dev_warn(dev,
++			 "platform poweroff priority busy, falling back to default priority\n");
++		ret = devm_register_sys_off_handler(dev,
++						    SYS_OFF_MODE_POWER_OFF,
++						    SYS_OFF_PRIO_DEFAULT,
++						    cyberdeck_k230_status_poweroff,
++						    ks);
++	}
++	if (ret)
++		return dev_err_probe(dev, ret,
++				     "failed to register poweroff handler\n");
++
++	dev_info(dev, "K230_STATUS registered\n");
++
++	return 0;
++}
++
++static const struct of_device_id cyberdeck_k230_status_of_match[] = {
++	{ .compatible = "cyberdeck,k230-status" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, cyberdeck_k230_status_of_match);
++
++static struct platform_driver cyberdeck_k230_status_driver = {
++	.probe = cyberdeck_k230_status_probe,
++	.driver = {
++		.name = "cyberdeck-k230-status",
++		.of_match_table = cyberdeck_k230_status_of_match,
++	},
++};
++module_platform_driver(cyberdeck_k230_status_driver);
++
++MODULE_AUTHOR("Cyberdeck maintainers");
++MODULE_DESCRIPTION("Cyberdeck K230 status/poweroff handshake driver");
++MODULE_LICENSE("GPL");

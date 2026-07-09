@@ -1,0 +1,8 @@
+Package: k230-status-ready
+Version: 1.0
+Section: misc
+Priority: optional
+Architecture: all
+Maintainer: Cyberdeck Maintainers <maintainers@cyberdeck.local>
+Description: Cyberdeck K230 status ready systemd service
+ Marks the cyberdeck,k230-status kernel driver ready once Debian userspace reaches multi-user startup.

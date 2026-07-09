@@ -1,0 +1,5 @@
+config BR2_PACKAGE_K230_STATUS_READY
+	bool "Cyberdeck K230 status ready service"
+	help
+	  Installs a small helper and startup integration that writes 1 to the
+	  cyberdeck,k230-status platform driver's ready sysfs attribute.

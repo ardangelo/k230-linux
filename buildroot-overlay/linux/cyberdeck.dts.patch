@@ -3,12 +3,13 @@ new file mode 100644
 index 000000000..6ae6c638a
 --- /dev/null
 +++ b/arch/riscv/boot/dts/canaan/cyberdeck.dts
-@@ -0,0 +1,142 @@
+@@ -0,0 +1,148 @@
 +// SPDX-License-Identifier: GPL-2.0 OR MIT
 +/*
 + * Copyright (C) 2024 Yangyu Chen <cyy@cyyself.name>
 + */
 +
++#include <dt-bindings/gpio/gpio.h>
 +#include "k230.dtsi"
 +
 +/ {
@@ -45,6 +46,11 @@ index 000000000..6ae6c638a
 +		compatible = "mmc-pwrseq-simple";
 +		reset-gpios = <&gpio0 53 GPIO_ACTIVE_LOW>;
 +	    post-power-on-delay-ms = <200>;
++	};
++
++	k230_status: k230-status {
++		compatible = "cyberdeck,k230-status";
++		status-gpios = <&gpio0_ports 25 GPIO_ACTIVE_HIGH>;
 +	};
 +};
 +
