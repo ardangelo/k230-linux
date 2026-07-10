@@ -26,6 +26,37 @@
 #include "../common/k230_board_common.h"
 
 #define AIC8800
+#define K230_STATUS_GPIO	25
+#define K230_STATUS_MASK	BIT(K230_STATUS_GPIO)
+
+/*
+ * Keep K230_STATUS low until Linux takes ownership.  Program the output data
+ * before changing direction so enabling the output cannot produce a high
+ * pulse.
+ */
+static void k230_status_drive_low(void)
+{
+	u32 data = readl((void *)(GPIO_BASE_ADDR0 + 0x0));
+	u32 direction;
+
+	data &= ~K230_STATUS_MASK;
+	writel(data, (void *)(GPIO_BASE_ADDR0 + 0x0));
+
+	direction = readl((void *)(GPIO_BASE_ADDR0 + 0x4));
+	direction |= K230_STATUS_MASK;
+	writel(direction, (void *)(GPIO_BASE_ADDR0 + 0x4));
+}
+
+int board_init(void)
+{
+	k230_status_drive_low();
+	return 0;
+}
+
+void quick_boot_board_init(void)
+{
+	k230_status_drive_low();
+}
 
 sysctl_boot_mode_e sysctl_boot_get_boot_mode(void)
 {

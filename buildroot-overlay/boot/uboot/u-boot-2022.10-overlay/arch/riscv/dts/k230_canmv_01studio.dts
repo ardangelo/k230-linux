@@ -24,13 +24,13 @@
  */
 /dts-v1/;
 #include <dt-bindings/pinctrl/k230_evb.h>
-#define BANK_VOLTAGE_IO0_IO1	 K230_MSC_1V8  // FIXED
-#define BANK_VOLTAGE_IO2_IO13	 K230_MSC_3V3
-#define BANK_VOLTAGE_IO14_IO25	 K230_MSC_1V8
-#define BANK_VOLTAGE_IO26_IO37	 K230_MSC_1V8
-#define BANK_VOLTAGE_IO38_IO49	 K230_MSC_3V3
-#define BANK_VOLTAGE_IO50_IO61	 K230_MSC_3V3
-#define BANK_VOLTAGE_IO62_IO63	 K230_MSC_1V8
+#define BANK_VOLTAGE_IO0_IO1	 K230_MSC_1V8  /* fixed 1.8 V */
+#define BANK_VOLTAGE_IO2_IO13	 K230_MSC_3V3  /* VDDIO_BANK0 */
+#define BANK_VOLTAGE_IO14_IO25	 K230_MSC_1V8  /* VDDIO_BANK1 */
+#define BANK_VOLTAGE_IO26_IO37	 K230_MSC_1V8  /* VDDIO_BANK2 */
+#define BANK_VOLTAGE_IO38_IO49	 K230_MSC_3V3  /* VDDIO_BANK3 */
+#define BANK_VOLTAGE_IO50_IO61	 K230_MSC_3V3  /* VDDIO_BANK4 */
+#define BANK_VOLTAGE_IO62_IO63	 K230_MSC_1V8  /* VDDIO_BANK5 */
 #include "k230.dtsi"
 
 / {
@@ -55,127 +55,117 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pins>;
 
-//	Please pay attention to the bank voltage! will damage the chip.
+	/*
+	 * These voltage selections must match the board rails above; a mismatch can
+	 * damage the SoC.  Use drive level 7 for driven signals and level 0 where the
+	 * output buffer is disabled.  The K230 adaptation guide uses level 7 as its
+	 * general-purpose setting for the dual-voltage pads.
+	 */
 	pins: iomux_pins {
 		u-boot,dm-pre-reloc;
 		pinctrl-single,pins = <
 
-		// S3 KEY
-		(IO0 ) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO0_IO1 <<MSC | 1<<IE | 1<<OE | 1<<PU | 0<<PD | 2<<DS | 0<<ST )
-		(IO1 ) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO0_IO1 <<MSC | 1<<IE | 1<<OE | 1<<PU | 0<<PD | 2<<DS | 0<<ST )
+		/* Boot-mode straps: BOOT0 is pulled low and BOOT1 high externally. */
+		(IO0 ) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO0_IO1 <<MSC | 1<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 1<<ST )
+		(IO1 ) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO0_IO1 <<MSC | 1<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 1<<ST )
 
-		// JP1-PIN7 JTAG
-		(IO2 ) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO2_IO13 <<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 4<<DS | 0<<ST )
-		(IO3 ) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO2_IO13 <<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 4<<DS | 0<<ST )
-		(IO4 ) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO2_IO13 <<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 4<<DS | 0<<ST )
-		(IO5 ) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO2_IO13 <<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 4<<DS | 0<<ST )
-		(IO6 ) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO2_IO13 <<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 4<<DS | 0<<ST )
+		/* IO2-IO8: unconnected; leave as high-impedance GPIOs. */
+		(IO2 ) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO2_IO13 <<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
+		(IO3 ) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO2_IO13 <<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
+		(IO4 ) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO2_IO13 <<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
+		(IO5 ) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO2_IO13 <<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
+		(IO6 ) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO2_IO13 <<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
+		(IO7 ) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO2_IO13 <<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
+		(IO8 ) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO2_IO13 <<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
 
-		// CAM2_I2C4_SCL
-		(IO7 ) ( 2<<SEL | 0<<SL | BANK_VOLTAGE_IO2_IO13 <<MSC | 1<<IE | 1<<OE | 1<<PU | 0<<PD | 7<<DS | 1<<ST )
-		// CAM2_I2C4_SDA
-		(IO8 ) ( 2<<SEL | 0<<SL | BANK_VOLTAGE_IO2_IO13 <<MSC | 1<<IE | 1<<OE | 1<<PU | 0<<PD | 7<<DS | 1<<ST )
-		// CAM0_GPIO9
-		(IO9 ) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO2_IO13 <<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
-		// CAM0_GPIO10
-		(IO10) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO2_IO13 <<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 8<<DS | 0<<ST )
-		// GPIO11
-		(IO11) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO2_IO13 <<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 8<<DS | 0<<ST )
-		// GPIO12
-		(IO12) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO2_IO13 <<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 8<<DS | 0<<ST )
+		/* Status LED, active high. */
+		(IO9 ) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO2_IO13 <<MSC | 0<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 0<<ST )
+		/* IO10: unconnected. */
+		(IO10) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO2_IO13 <<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
+		/* UART2 on the K230 GPIO interface header. */
+		(IO11) ( 2<<SEL | 0<<SL | BANK_VOLTAGE_IO2_IO13 <<MSC | 0<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 0<<ST ) /* K230_TX2 */
+		(IO12) ( 2<<SEL | 0<<SL | BANK_VOLTAGE_IO2_IO13 <<MSC | 1<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 1<<ST ) /* K230_RX2 */
+		/* IO13: unconnected. */
+		(IO13) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO2_IO13 <<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
 
-		(IO13) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO2_IO13 <<MSC | 0<<IE | 1<<OE | 0<<PU | 1<<PD | 4<<DS | 1<<ST )
+		/* SPI0/OSPI drives the Sharp display through the TMUX1574 switch. */
+		(IO14) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO14_IO25<<MSC | 0<<IE | 1<<OE | 1<<PU | 0<<PD | 7<<DS | 0<<ST ) /* GPIO chip select: K230_SPI0_CS0 */
+		(IO15) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO14_IO25<<MSC | 0<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 0<<ST ) /* OSPI_CLK: K230_SPI0_SCLK */
+		(IO16) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO14_IO25<<MSC | 0<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 0<<ST ) /* OSPI_D0: K230_SPI0_MOSI */
+		/* IO17-IO18: unconnected. */
+		(IO17) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO14_IO25<<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
+		(IO18) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO14_IO25<<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
+		/* Sharp display DISP signal through the TMUX1574 switch. */
+		(IO19) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO14_IO25<<MSC | 0<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 0<<ST ) /* K230_DISP_DISP */
 
-		// GPIO14 ~ GPIO20
-		(IO14) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO14_IO25<<MSC | 1<<IE | 1<<OE | 1<<PU | 0<<PD | 15<<DS | 1<<ST )
-		(IO15) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO14_IO25<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 15<<DS | 1<<ST )
-		(IO16) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO14_IO25<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 15<<DS | 1<<ST )
-		(IO17) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO14_IO25<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 15<<DS | 1<<ST )
-		(IO18) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO14_IO25<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 15<<DS | 1<<ST )
-		(IO19) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO14_IO25<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 15<<DS | 1<<ST )
-		(IO20) ( 2<<SEL | 0<<SL | BANK_VOLTAGE_IO14_IO25<<MSC | 1<<IE | 1<<OE | 1<<PU | 0<<PD | 15<<DS | 1<<ST )
-		// KEY_GPIO21
-		(IO21) ( 2<<SEL | 0<<SL | BANK_VOLTAGE_IO14_IO25<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 15<<DS | 1<<ST )
-		// TP_RST - HDMI_RSTN
-		(IO22) ( 2<<SEL | 0<<SL | BANK_VOLTAGE_IO14_IO25<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 15<<DS | 1<<ST )
-		// TP_INT - HDMI_INT
-		(IO23) ( 2<<SEL | 0<<SL | BANK_VOLTAGE_IO14_IO25<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 15<<DS | 1<<ST )
-		// LCD_RST
-		(IO24) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO14_IO25<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 15<<DS | 1<<ST )
-		// K230_STATUS
-		(IO25) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO14_IO25<<MSC | 0<<IE | 1<<OE | 0<<PU | 0<<PD | 3<<DS  | 0<<ST )
+		/*
+		 * QSPI1 link to the nRF52840.  Both pad directions are enabled so the
+		 * controller role can be selected by software.
+		 */
+		(IO20) ( 2<<SEL | 0<<SL | BANK_VOLTAGE_IO14_IO25<<MSC | 1<<IE | 1<<OE | 1<<PU | 0<<PD | 7<<DS | 1<<ST ) /* K230_SPI1_CS0 */
+		(IO21) ( 2<<SEL | 0<<SL | BANK_VOLTAGE_IO14_IO25<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST ) /* K230_SPI1_SCLK */
+		(IO22) ( 2<<SEL | 0<<SL | BANK_VOLTAGE_IO14_IO25<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST ) /* K230_SPI1_MOSI / NRF_SPI1_MISO */
+		(IO23) ( 2<<SEL | 0<<SL | BANK_VOLTAGE_IO14_IO25<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST ) /* K230_SPI1_MISO / NRF_SPI1_MOSI */
+		/* IO24: unconnected. */
+		(IO24) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO14_IO25<<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
+		/* Pulled down until board code actively drives K230_STATUS low. */
+		(IO25) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO14_IO25<<MSC | 0<<IE | 1<<OE | 0<<PU | 1<<PD | 7<<DS | 0<<ST ) /* K230_STATUS */
 
-		(IO26) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
-		(IO27) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
-		(IO28) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
-		(IO29) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
-		(IO30) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
-		(IO31) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
+		/* IO26-IO35: unconnected; leave as high-impedance GPIOs. */
+		(IO26) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
+		(IO27) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
+		(IO28) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
+		(IO29) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
+		(IO30) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
+		(IO31) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
+		(IO32) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
+		(IO33) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
+		(IO34) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
+		(IO35) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
 
-		// GPIO32 ~ GPIO35
-		(IO32) ( 2<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 0<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
-		(IO33) ( 2<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 0<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
-		(IO34) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC |	1<<IE | 0<<OE | 0<<PU | 1<<PD | 7<<DS | 0<<ST )
-		(IO35) ( 2<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
-		// UART4_TXD
-		(IO36) ( 3<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 0<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
-		// UART4_RXD
-		(IO37) ( 3<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 1<<IE | 0<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
+		/* UART4 link to the nRF52840, through 1 kOhm series resistors. */
+		(IO36) ( 3<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 0<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 0<<ST ) /* K230_TX4 -> NRF_RX0 */
+		(IO37) ( 3<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 1<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 1<<ST ) /* K230_RX4 <- NRF_TX0 */
 
-		// UART0_TXD
-		(IO38) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO38_IO49<<MSC | 0<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
-		// UART0_RXD
-		(IO39) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO38_IO49<<MSC | 1<<IE | 0<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
+		/* UART0 channel of the CH342K USB-to-UART bridge. */
+		(IO38) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO38_IO49<<MSC | 0<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 0<<ST ) /* K230_UART0_TXD */
+		(IO39) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO38_IO49<<MSC | 1<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 1<<ST ) /* K230_UART0_RXD */
 
-		// I2C1_SCL -> camera
-		(IO40) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO38_IO49<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
-		// I2C1_SDA -> camera
-		(IO41) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO38_IO49<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
+		/* UART1 link to the AIC8800D Bluetooth interface. */
+		(IO40) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO38_IO49<<MSC | 0<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 0<<ST ) /* TXD -> BT-UART-RX */
+		(IO41) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO38_IO49<<MSC | 1<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 1<<ST ) /* RXD <- BT-UART-TX */
+		(IO42) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO38_IO49<<MSC | 0<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 0<<ST ) /* RTS -> BT-UART-CTS */
+		(IO43) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO38_IO49<<MSC | 1<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 1<<ST ) /* CTS <- BT-UART-RTS */
 
-		// GPIO42
-		(IO42) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO38_IO49<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
-		// GPIO43
-		(IO43) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO38_IO49<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
+		/* IO44-IO49: unconnected; leave as high-impedance GPIOs. */
+		(IO44) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO38_IO49<<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
+		(IO45) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO38_IO49<<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
+		(IO46) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO38_IO49<<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
+		(IO47) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO38_IO49<<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
+		(IO48) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO38_IO49<<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
+		(IO49) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO38_IO49<<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
 
-		// CAM1_GPIO44
-		(IO44) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO38_IO49<<MSC | 1<<IE | 1<<OE | 1<<PU | 0<<PD | 7<<DS | 1<<ST )
-		// CAM1_GPIO45
-		(IO45) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO38_IO49<<MSC | 1<<IE | 1<<OE | 1<<PU | 0<<PD | 7<<DS | 1<<ST )
+		/* UART1 channel of the CH342K USB-to-UART bridge. */
+		(IO50) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO50_IO61<<MSC | 0<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 0<<ST ) /* K230_UART3_TXD */
+		(IO51) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO50_IO61<<MSC | 1<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 1<<ST ) /* K230_UART3_RXD */
 
-		// GPIO46
-		(IO46) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO38_IO49<<MSC | 1<<IE | 1<<OE | 1<<PU | 0<<PD | 7<<DS | 1<<ST )
-		// GPIO47
-		(IO47) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO38_IO49<<MSC | 1<<IE | 1<<OE | 1<<PU | 0<<PD | 7<<DS | 1<<ST )
+		/* AIC8800D reset and Wi-Fi enable controls. */
+		(IO52) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO50_IO61<<MSC | 0<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 0<<ST ) /* BT-RESETN */
+		(IO53) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO50_IO61<<MSC | 0<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 0<<ST ) /* WIFI_REGON */
 
-		//iic0
-		(IO48) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO38_IO49<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
-		(IO49) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO38_IO49<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
+		/* MMC1/SDIO link to the AIC8800D Wi-Fi interface. */
+		(IO54) ( 2<<SEL | 0<<SL | BANK_VOLTAGE_IO50_IO61<<MSC | 1<<IE | 1<<OE | 1<<PU | 0<<PD | 7<<DS | 1<<ST ) /* WIFI_CMD */
+		(IO55) ( 2<<SEL | 0<<SL | BANK_VOLTAGE_IO50_IO61<<MSC | 0<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 0<<ST ) /* WIFI_CLK */
+		(IO56) ( 2<<SEL | 0<<SL | BANK_VOLTAGE_IO50_IO61<<MSC | 1<<IE | 1<<OE | 1<<PU | 0<<PD | 7<<DS | 1<<ST ) /* WIFI_D0 */
+		(IO57) ( 2<<SEL | 0<<SL | BANK_VOLTAGE_IO50_IO61<<MSC | 1<<IE | 1<<OE | 1<<PU | 0<<PD | 7<<DS | 1<<ST ) /* WIFI_D1 */
+		(IO58) ( 2<<SEL | 0<<SL | BANK_VOLTAGE_IO50_IO61<<MSC | 1<<IE | 1<<OE | 1<<PU | 0<<PD | 7<<DS | 1<<ST ) /* WIFI_D2 */
+		(IO59) ( 2<<SEL | 0<<SL | BANK_VOLTAGE_IO50_IO61<<MSC | 1<<IE | 1<<OE | 1<<PU | 0<<PD | 7<<DS | 1<<ST ) /* WIFI_D3 */
 
-		// UART3_TXD
-		(IO50) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO50_IO61<<MSC | 0<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
-		// UART3_RXD
-		(IO51) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO50_IO61<<MSC | 1<<IE | 0<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
-
-		// LED_GPIO52
-		(IO52) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO50_IO61<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
-		// WIFI_REGON
-		(IO53) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO50_IO61<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
-
-		// MMC1 -> WIFI
-		(IO54) ( 2<<SEL | 0<<SL | BANK_VOLTAGE_IO50_IO61<<MSC | 1<<IE | 1<<OE | 1<<PU | 0<<PD | 7<<DS | 1<<ST )
-		(IO55) ( 2<<SEL | 0<<SL | BANK_VOLTAGE_IO50_IO61<<MSC | 0<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
-		(IO56) ( 2<<SEL | 0<<SL | BANK_VOLTAGE_IO50_IO61<<MSC | 1<<IE | 1<<OE | 1<<PU | 0<<PD | 7<<DS | 1<<ST )
-		(IO57) ( 2<<SEL | 0<<SL | BANK_VOLTAGE_IO50_IO61<<MSC | 1<<IE | 1<<OE | 1<<PU | 0<<PD | 7<<DS | 1<<ST )
-		(IO58) ( 2<<SEL | 0<<SL | BANK_VOLTAGE_IO50_IO61<<MSC | 1<<IE | 1<<OE | 1<<PU | 0<<PD | 7<<DS | 1<<ST )
-		(IO59) ( 2<<SEL | 0<<SL | BANK_VOLTAGE_IO50_IO61<<MSC | 1<<IE | 1<<OE | 1<<PU | 0<<PD | 7<<DS | 1<<ST )
-
-		(IO60) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO50_IO61<<MSC | 1<<IE | 1<<OE | 1<<PU | 0<<PD | 7<<DS | 1<<ST )
-		(IO61) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO50_IO61<<MSC | 1<<IE | 1<<OE | 1<<PU | 0<<PD | 7<<DS | 1<<ST )
-
-		// CAM2_RST
-		(IO62) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO62_IO63<<MSC | 0<<IE | 1<<OE | 0<<PU | 1<<PD | 4<<DS | 1<<ST )
-		// CAM2_MCLK
-		(IO63) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO62_IO63<<MSC | 0<<IE | 1<<OE | 0<<PU | 1<<PD | 4<<DS | 1<<ST )
+		/* IO60-IO63: unconnected; leave as high-impedance GPIOs. */
+		(IO60) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO50_IO61<<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
+		(IO61) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO50_IO61<<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
+		(IO62) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO62_IO63<<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
+		(IO63) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO62_IO63<<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
 		>;
 	};
 };
