@@ -174,6 +174,14 @@ distribution_rootfs_replace()
 
     rm -rf ${distr_rootfs};tar --no-same-owner --exclude='*/dev/*' -xf ${distr_rootfs}.tar.gz
     cp ${BINARIES_DIR}/../target/lib/modules ${distr_rootfs}/lib -r;
+    if [ -d ${BINARIES_DIR}/../target/lib/firmware ]; then
+        mkdir -p ${distr_rootfs}/lib/firmware;
+        cp -a ${BINARIES_DIR}/../target/lib/firmware/. ${distr_rootfs}/lib/firmware/;
+        if [ -d ${BINARIES_DIR}/../target/lib/firmware/aic8800D80 ]; then
+            mkdir -p ${distr_rootfs}/etc/modprobe.d;
+            printf '%s\n' 'options aic8800_bsp aic_fw_path=/lib/firmware/aic8800D80' > ${distr_rootfs}/etc/modprobe.d/aic8800.conf;
+        fi
+    fi
     cp ${BINARIES_DIR}/../target/bin/sta.sh ${distr_rootfs}/bin ;
     #cp ${BINARIES_DIR}/../target/bin/adb.sh ${distr_rootfs}/bin ;
     cat  ${BINARIES_DIR}/../target/etc/version/release_version   >> ${distr_rootfs}/etc/issue ;
