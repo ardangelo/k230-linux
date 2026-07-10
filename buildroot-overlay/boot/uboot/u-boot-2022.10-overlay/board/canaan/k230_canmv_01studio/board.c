@@ -28,11 +28,16 @@
 #define AIC8800
 #define K230_STATUS_GPIO	25
 #define K230_STATUS_MASK	BIT(K230_STATUS_GPIO)
+#define K230_STATUS_IOMUX	(IOMUX_BASE_ADDR + K230_STATUS_GPIO * 4)
+#define K230_STATUS_IOMUX_CFG	(BIT(9) | BIT(7) | BIT(5) | (3U << 1))
 
 /*
  * Keep K230_STATUS low until Linux takes ownership.  Program the output data
  * before changing direction so enabling the output cannot produce a high
- * pulse.
+ * pulse.  Reapply the complete pad configuration because U-Boot tears down
+ * driver-model devices immediately before handing control to OpenSBI.
+ *
+ * IOMUX: GPIO SEL0, 1.8 V MSC, output enabled, pull-down enabled, DS3.
  */
 static void k230_status_drive_low(void)
 {
@@ -45,6 +50,8 @@ static void k230_status_drive_low(void)
 	direction = readl((void *)(GPIO_BASE_ADDR0 + 0x4));
 	direction |= K230_STATUS_MASK;
 	writel(direction, (void *)(GPIO_BASE_ADDR0 + 0x4));
+
+	writel(K230_STATUS_IOMUX_CFG, (void *)K230_STATUS_IOMUX);
 }
 
 int board_init(void)
@@ -54,6 +61,12 @@ int board_init(void)
 }
 
 void quick_boot_board_init(void)
+{
+	k230_status_drive_low();
+}
+
+/* Last board operation before U-Boot jumps to OpenSBI. */
+void board_cleanup_before_linux(void)
 {
 	k230_status_drive_low();
 }

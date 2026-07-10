@@ -48,6 +48,11 @@ static inline void improving_cpu_performance(void)
 	csr_write(CSR_SMPEN, 0x1);
 }
 
+/* Allow a board to restore handoff-critical signals after DM teardown. */
+__weak void board_cleanup_before_linux(void)
+{
+}
+
 /*
  * cleanup_before_linux() is called just before we call linux
  * it prepares the processor for linux
@@ -66,6 +71,7 @@ int cleanup_before_linux(void)
 	asm volatile(".long 0x0170000b\n":::"memory");
 
 	improving_cpu_performance();
+	board_cleanup_before_linux();
 
 	return 0;
 }
