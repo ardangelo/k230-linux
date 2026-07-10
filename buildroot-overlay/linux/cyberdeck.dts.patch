@@ -133,7 +133,7 @@ index 000000000..6ae6c638a
 +        //reg = <0x0 0x91584000 0x0 0x1000>;
 +        reg = <0>;
 +
-+        disp-gpios = <&gpio0_ports 18 0>;
++        disp-gpios = <&gpio0_ports 19 0>;
 +
 +        spi-cs-high = <0>;
 +        spi-max-frequency = <4000000>;

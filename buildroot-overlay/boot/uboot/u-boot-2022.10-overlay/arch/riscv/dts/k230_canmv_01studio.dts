@@ -89,7 +89,7 @@
 		(IO13) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO2_IO13 <<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
 
 		/* SPI0/OSPI drives the Sharp display through the TMUX1574 switch. */
-		(IO14) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO14_IO25<<MSC | 0<<IE | 1<<OE | 1<<PU | 0<<PD | 7<<DS | 0<<ST ) /* GPIO chip select: K230_SPI0_CS0 */
+		(IO14) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO14_IO25<<MSC | 0<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 0<<ST ) /* GPIO chip select: K230_SPI0_CS0 */
 		(IO15) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO14_IO25<<MSC | 0<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 0<<ST ) /* OSPI_CLK: K230_SPI0_SCLK */
 		(IO16) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO14_IO25<<MSC | 0<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 0<<ST ) /* OSPI_D0: K230_SPI0_MOSI */
 		/* IO17-IO18: unconnected. */
@@ -109,7 +109,7 @@
 		/* IO24: unconnected. */
 		(IO24) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO14_IO25<<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
 		/* Pulled down until board code actively drives K230_STATUS low. */
-		(IO25) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO14_IO25<<MSC | 0<<IE | 1<<OE | 0<<PU | 1<<PD | 7<<DS | 0<<ST ) /* K230_STATUS */
+		(IO25) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO14_IO25<<MSC | 0<<IE | 1<<OE | 0<<PU | 1<<PD | 3<<DS | 0<<ST ) /* K230_STATUS */
 
 		/* IO26-IO35: unconnected; leave as high-impedance GPIOs. */
 		(IO26) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 0<<IE | 0<<OE | 0<<PU | 0<<PD | 0<<DS | 0<<ST )
