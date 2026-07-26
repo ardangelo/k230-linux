@@ -1,4 +1,4 @@
-SHARP_DRM_VERSION = 1.5
+SHARP_DRM_VERSION = 1.7
 SHARP_DRM_BASE = $(realpath $(TOPDIR))"/package/sharp-drm"
 SHARP_DRM_SITE = $(SHARP_DRM_BASE)/module
 SHARP_DRM_SITE_METHOD = local

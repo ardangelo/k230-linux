@@ -1,4 +1,4 @@
-sharp-drm (1.5-1) unstable; urgency=medium
+sharp-drm (1.7-1) unstable; urgency=medium
 
   * Build an ABI-specific K230 binary module package.
 

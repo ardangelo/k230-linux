@@ -3,7 +3,7 @@
   "packages": [
     {
       "source_name": "sharp-drm",
-      "upstream_version": "1.5",
+      "upstream_version": "1.7",
       "canonical_source": "buildroot-overlay/package/sharp-drm/module",
       "packaging": "packaging/debian/packages/sharp-drm/debian",
       "configs": [
