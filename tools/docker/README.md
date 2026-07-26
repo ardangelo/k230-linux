@@ -158,10 +158,10 @@ docker run --rm --privileged -v $(pwd):/src k230-debian \
 ```
 
 The package and repository targets do not need `--privileged`; image assembly
-does. The container verifies registered `qemu-riscv64` binfmt execution before
-touching the staged rootfs and does not fall back to payload extraction. On the
-host, `/proc/sys/fs/binfmt_misc/qemu-riscv64` must exist and be enabled. Rebuild
-the Debian container after changing its Dockerfile.
+does. The installer mounts `binfmt_misc`, enables the packaged `qemu-riscv64`
+handler, and verifies a RISC-V command before touching the staged rootfs. It
+fails without the required container privilege and never falls back to payload
+extraction. Rebuild the Debian container after changing its Dockerfile.
 
 Sharp DRM-only iteration requires no Linux clean or rebuild while the kernel ABI
 is unchanged:
