@@ -385,7 +385,12 @@ def build_package(
     seen: set[str] = set()
     for package_path in produced:
         fields = run(
-            ["dpkg-deb", "-f", str(package_path), "Package", "Version", "Architecture"]
+            [
+                "dpkg-deb",
+                "--show",
+                "--showformat=${Package}\\n${Version}\\n${Architecture}\\n",
+                str(package_path),
+            ]
         ).splitlines()
         if len(fields) != 3:
             fail(f"could not inspect declared output {package_path.name}")

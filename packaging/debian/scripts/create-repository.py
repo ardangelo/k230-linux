@@ -44,8 +44,7 @@ def sha256_file(path: Path) -> str:
 
 def field(path: Path, name: str) -> str:
     result = subprocess.run(
-        ["dpkg-deb", "-f", str(path), name],
-        check=False,
+        ["dpkg-deb", "--show", f"--showformat=${{{name}}}", str(path)],
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
