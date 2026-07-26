@@ -249,7 +249,7 @@ def debian_version(upstream: str, state: dict[str, Any], kernel_release: str) ->
     version = f"{upstream}+git{state['revision'][:12]}"
     if state["dirty"]:
         version += f"+dirty.{state['content_sha256'][:12]}"
-    return f"{version}-1+k230.{release}"
+    return f"{version}+k230.{release}-1"
 
 
 def replace_generated_metadata(source: Path, version: str, kernel_release: str) -> None:
