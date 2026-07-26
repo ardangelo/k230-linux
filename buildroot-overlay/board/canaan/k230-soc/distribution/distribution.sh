@@ -153,6 +153,7 @@ distribution_rootfs_replace()
     local distr_rootfs_web_site="$3" #
     local md5_v="$4"
     local dist_img_name="${distname}.img"      #debian.img
+    local K230_SDK_ROOT=$(dirname $(dirname ${BRW_BUILD_DIR}))
 
     if [ "$(id -u)" -ne 0 ]; then
         print_red "permission denied,you need root privileges,example: sudo make debian"
