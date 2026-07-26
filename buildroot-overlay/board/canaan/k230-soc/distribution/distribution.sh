@@ -193,6 +193,7 @@ distribution_rootfs_replace()
     cp ${BINARIES_DIR}/../target/usr/lib/libjpeg.so.9  -fL ${distr_rootfs}/usr/lib/riscv64-linux-gnu/ ;
     cp ${BINARIES_DIR}/../target/usr/lib/libcrypt.so.2  -rfL ${distr_rootfs}/usr/lib/riscv64-linux-gnu/ ;
 
+    mkdir -p ${distr_rootfs}/etc/vvcam;
     cp ${BINARIES_DIR}/../target/etc/init.d/S99adb_mtp -rf ${distr_rootfs}/etc/vvcam/S99adb_mtp;
     cp ${BINARIES_DIR}/../target/etc/umtprd  -rf ${distr_rootfs}/etc/;
     cp ${BINARIES_DIR}/../target/usr/sbin/umtprd  -rf ${distr_rootfs}/usr/sbin/;

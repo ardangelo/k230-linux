@@ -230,6 +230,7 @@ def main() -> None:
 
     with tempfile.TemporaryDirectory(prefix="repository.", dir=local_output) as temporary_name:
         temporary = Path(temporary_name)
+        temporary.chmod(0o755)
         for package in local_packages:
             shutil.copy2(packages_dir / package["file"], temporary / package["file"])
         for package in validated_vendors:
@@ -246,10 +247,9 @@ def main() -> None:
             )
         if result.returncode != 0:
             fail(f"dpkg-scanpackages failed: {result.stderr.strip()}")
-        with packages_index.open("rb") as source, gzip.GzipFile(
-            filename="", mode="wb", fileobj=(temporary / "Packages.gz").open("wb"), mtime=0
-        ) as compressed:
-            shutil.copyfileobj(source, compressed)
+        with packages_index.open("rb") as source, (temporary / "Packages.gz").open("wb") as output:
+            with gzip.GzipFile(filename="", mode="wb", fileobj=output, mtime=0) as compressed:
+                shutil.copyfileobj(source, compressed)
         repository_manifest = {
             "schema_version": 1,
             "conf": conf,
