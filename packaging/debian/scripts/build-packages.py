@@ -225,15 +225,14 @@ def resolve_context(conf: str) -> dict[str, Any]:
 
 
 def source_state(source: Path) -> dict[str, Any]:
-    revision = run(["git", "-C", str(source), "rev-parse", "HEAD"])
-    status = run(
-        ["git", "-C", str(source), "status", "--porcelain", "--untracked-files=all"]
-    )
+    git = ["git", "-c", f"safe.directory={source}", "-C", str(source)]
+    revision = run([*git, "rev-parse", "HEAD"])
+    status = run([*git, "status", "--porcelain", "--untracked-files=all"])
     dirty = bool(status)
     if dirty and os.environ.get("RELEASE") == "1":
         fail(f"release build rejects dirty canonical source {source.relative_to(ROOT)}:\n{status}")
     try:
-        epoch = int(run(["git", "-C", str(source), "show", "-s", "--format=%ct", "HEAD"]))
+        epoch = int(run([*git, "show", "-s", "--format=%ct", "HEAD"]))
     except ValueError:
         fail(f"invalid commit timestamp for {source.relative_to(ROOT)}")
     return {
