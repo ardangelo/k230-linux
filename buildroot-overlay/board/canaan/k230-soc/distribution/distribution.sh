@@ -182,19 +182,12 @@ distribution_rootfs_replace()
             printf '%s\n' 'options aic8800_bsp aic_fw_path=/lib/firmware/aic8800D80' > ${distr_rootfs}/etc/modprobe.d/aic8800.conf;
         fi
     fi
+    local package_repository="${K230_SDK_ROOT}/output/${CONF}/debian/repository"
+    "${K230_SDK_ROOT}/packaging/debian/scripts/install-rootfs-packages.sh" \
+        "${BINARIES_DIR}/${distr_rootfs}" "${package_repository}"
     cp ${BINARIES_DIR}/../target/bin/sta.sh ${distr_rootfs}/bin ;
     #cp ${BINARIES_DIR}/../target/bin/adb.sh ${distr_rootfs}/bin ;
     cat  ${BINARIES_DIR}/../target/etc/version/release_version   >> ${distr_rootfs}/etc/issue ;
-    {
-        wget -c -r -np -nc -k -nd  -A "*.deb" -P  ${BINARIES_DIR}/deb/  ${DISTR_DOWN_URI}/deb/
-        #install deb
-        for item in ${BINARIES_DIR}/deb/*; do
-            dpkg -x $item  ${distr_rootfs}/
-        done
-        mkdir -p ${distr_rootfs}/etc/systemd/system/basic.target.wants/;
-        cd  ${distr_rootfs}/etc/systemd/system/basic.target.wants/;   ln -s  /etc/systemd/system/vvcam.service   vvcam.service;   cd -;
-        #rsync -a --ignore-times  --chmod=u=rwX,go=rX --exclude .empty --exclude '*~' t/   ${distr_rootfs}/
-    }
 
     cp ${BINARIES_DIR}/../target/usr/lib/libjpeg.so.9  -fL ${distr_rootfs}/usr/lib/riscv64-linux-gnu/ ;
     cp ${BINARIES_DIR}/../target/usr/lib/libcrypt.so.2  -rfL ${distr_rootfs}/usr/lib/riscv64-linux-gnu/ ;
@@ -247,8 +240,6 @@ if [ "$(id -u)" -ne 0 ]; then
     print_red "permission denied,you need root privileges,example: sudo make debian"
     exit 1;
 fi
-apt-get update ;
-apt-get install parted curl spi-tools -y;
 
 if $(curl --output /dev/null --silent --head --fail https://ai.b-bug.org/k230/downloads/dl/distribution ) ;then
 DISTR_DOWN_URI="https://ai.b-bug.org/k230/downloads/dl/distribution"

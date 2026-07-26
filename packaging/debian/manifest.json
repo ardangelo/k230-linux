@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "packages": [
+    {
+      "source_name": "sharp-drm",
+      "upstream_version": "1.5",
+      "canonical_source": "buildroot-overlay/package/sharp-drm/module",
+      "packaging": "packaging/debian/packages/sharp-drm/debian",
+      "configs": [
+        "k230_canmv_01studio_defconfig"
+      ],
+      "requires_kernel": true,
+      "build_order": 10,
+      "binary_packages": [
+        {
+          "name": "k230-kernel-abi",
+          "architecture": "riscv64"
+        },
+        {
+          "name": "k230-sharp-drm",
+          "architecture": "riscv64"
+        }
+      ],
+      "install_packages": [
+        "k230-sharp-drm"
+      ]
+    }
+  ]
+}

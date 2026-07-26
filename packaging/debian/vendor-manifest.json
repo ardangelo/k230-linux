@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "packages": [
+    {
+      "file": "k230-face-detect.deb",
+      "package": "k230-face-detect",
+      "version": "1.0",
+      "architecture": "riscv64",
+      "sha256": "723d555fc08e850f7fbc5a5843c80bda4912c7f3fc6bc4119eb295f33a7a0176",
+      "configs": ["k230_canmv_01studio_defconfig"],
+      "urls": [
+        "https://ai.b-bug.org/k230/downloads/dl/distribution/deb/k230-face-detect.deb",
+        "https://kendryte-download.canaan-creative.com/k230/downloads/dl/distribution/deb/k230-face-detect.deb"
+      ],
+      "install": true
+    },
+    {
+      "file": "k230-ffmpeg.deb",
+      "package": "k230-ffmpeg",
+      "version": "1.0",
+      "architecture": "all",
+      "sha256": "0e40553dd0157938bab29ad367f55ef1386a859796258657741a86a75b88b565",
+      "configs": ["k230_canmv_01studio_defconfig"],
+      "urls": [
+        "https://ai.b-bug.org/k230/downloads/dl/distribution/deb/k230-ffmpeg.deb",
+        "https://kendryte-download.canaan-creative.com/k230/downloads/dl/distribution/deb/k230-ffmpeg.deb"
+      ],
+      "install": true
+    },
+    {
+      "file": "k230-helloworld-cmake.deb",
+      "package": "k230-helloworld-cmake",
+      "version": "1.0",
+      "architecture": "all",
+      "sha256": "031645d08be6d59d8ba6bfbe72941975e62cc337f20a14c5bf637c945def4f59",
+      "configs": ["k230_canmv_01studio_defconfig"],
+      "urls": [
+        "https://ai.b-bug.org/k230/downloads/dl/distribution/deb/k230-helloworld-cmake.deb",
+        "https://kendryte-download.canaan-creative.com/k230/downloads/dl/distribution/deb/k230-helloworld-cmake.deb"
+      ],
+      "install": true
+    },
+    {
+      "file": "k230-mvx-player.deb",
+      "package": "k230-mvx-player",
+      "version": "1.0",
+      "architecture": "all",
+      "sha256": "7d020f380f355303d8a06e159c30e55dc963d23964ef881307bab126fe35ae28",
+      "configs": ["k230_canmv_01studio_defconfig"],
+      "urls": [
+        "https://ai.b-bug.org/k230/downloads/dl/distribution/deb/k230-mvx-player.deb",
+        "https://kendryte-download.canaan-creative.com/k230/downloads/dl/distribution/deb/k230-mvx-player.deb"
+      ],
+      "install": true
+    },
+    {
+      "file": "k230-status-ready.deb",
+      "package": "k230-status-ready",
+      "version": "1.0",
+      "architecture": "all",
+      "sha256": "e9a121bae354644f9636e729972cb73128e952a80107b146a8ac1f33023c82a9",
+      "configs": ["k230_canmv_01studio_defconfig"],
+      "urls": [
+        "https://ai.b-bug.org/k230/downloads/dl/distribution/deb/k230-status-ready.deb",
+        "https://kendryte-download.canaan-creative.com/k230/downloads/dl/distribution/deb/k230-status-ready.deb"
+      ],
+      "install": true
+    },
+    {
+      "file": "k230-vg-lite.deb",
+      "package": "k230-vglite",
+      "version": "1.0",
+      "architecture": "all",
+      "sha256": "f05ec901340822b3b015cd1d66e96c7085b490bc73e99c6e9ad405ab300f2b69",
+      "configs": ["k230_canmv_01studio_defconfig"],
+      "urls": [
+        "https://ai.b-bug.org/k230/downloads/dl/distribution/deb/k230-vg-lite.deb",
+        "https://kendryte-download.canaan-creative.com/k230/downloads/dl/distribution/deb/k230-vg-lite.deb"
+      ],
+      "install": true
+    },
+    {
+      "file": "k230-vvcam.deb",
+      "package": "k230-vvcam",
+      "version": "1.0",
+      "architecture": "all",
+      "sha256": "ea63d592ce32d64c0086b5331d9224a49dc3af9eb7f6e0967ca7fedac65b3047",
+      "configs": ["k230_canmv_01studio_defconfig"],
+      "urls": [
+        "https://ai.b-bug.org/k230/downloads/dl/distribution/deb/k230-vvcam.deb",
+        "https://kendryte-download.canaan-creative.com/k230/downloads/dl/distribution/deb/k230-vvcam.deb"
+      ],
+      "install": false,
+      "quarantine_reason": "Maintainer scripts have no interpreter and start systemd directly; dpkg cannot configure this package safely in the image chroot."
+    }
+  ]
+}
