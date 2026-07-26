@@ -50,12 +50,12 @@ def run(
             check=True,
             text=True,
             stdout=subprocess.PIPE if capture else None,
-            stderr=subprocess.STDOUT if capture else None,
+            stderr=subprocess.PIPE if capture else None,
         )
     except FileNotFoundError:
         fail(f"required command is unavailable: {command[0]}")
     except subprocess.CalledProcessError as error:
-        output = error.stdout or ""
+        output = "\n".join(part for part in (error.stdout, error.stderr) if part)
         fail(f"command failed ({' '.join(command)}):\n{output.rstrip()}")
     return result.stdout.strip() if capture else ""
 
