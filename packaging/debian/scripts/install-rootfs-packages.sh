@@ -56,8 +56,18 @@ trap cleanup EXIT INT TERM
 [ -x "$ROOTFS/bin/true" ] || fail "rootfs lacks executable /bin/true"
 [ -f "$REPOSITORY/Packages" ] || fail "repository lacks Packages index"
 [ -f "$REPOSITORY_MANIFEST" ] || fail "repository manifest is missing"
-[ -r /proc/sys/fs/binfmt_misc/qemu-riscv64 ] || fail "qemu-riscv64 binfmt is not registered; run the Debian container with --privileged"
-grep -qx enabled /proc/sys/fs/binfmt_misc/qemu-riscv64 || fail "qemu-riscv64 binfmt is disabled"
+if ! mountpoint -q /proc/sys/fs/binfmt_misc; then
+    mount -t binfmt_misc binfmt_misc /proc/sys/fs/binfmt_misc 2>/dev/null ||
+        fail "cannot mount binfmt_misc; run the Debian container with --privileged"
+fi
+if [ ! -r /proc/sys/fs/binfmt_misc/qemu-riscv64 ]; then
+    command -v update-binfmts >/dev/null 2>&1 ||
+        fail "update-binfmts is unavailable; rebuild the k230-debian image"
+    update-binfmts --enable qemu-riscv64 ||
+        fail "cannot register qemu-riscv64; run the Debian container with --privileged"
+fi
+grep -qx enabled /proc/sys/fs/binfmt_misc/qemu-riscv64 ||
+    fail "qemu-riscv64 binfmt is disabled"
 
 mapfile -t REPOSITORY_VALUES < <(
     python3 - "$REPOSITORY_MANIFEST" <<'PY'
