@@ -241,7 +241,7 @@ chroot "$ROOTFS" dpkg-query -W cyberdeck-service >/dev/null
 [ -f "$ROOTFS/usr/lib/cyberdeck-service/libpebble3-jvm-fat.jar" ] ||
     fail "cyberdeck-service JVM library is missing"
 [ -x "$ROOTFS/usr/bin/kbd_mode" ] || fail "kbd dependency did not install kbd_mode"
-[ -x "$ROOTFS/usr/bin/java" ] || fail "Java runtime dependency is missing"
+chroot "$ROOTFS" test -x /usr/bin/java || fail "Java runtime dependency is missing"
 chroot "$ROOTFS" systemctl is-enabled --quiet cyberdeck-service.service ||
     fail "cyberdeck-service is not enabled"
 chroot "$ROOTFS" systemctl disable \
