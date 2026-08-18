@@ -236,6 +236,14 @@ grep -qF 'updates/sharp-drm.ko:' "$ROOTFS/lib/modules/$KERNEL_RELEASE/modules.de
 ABI_VERSION=$(chroot "$ROOTFS" dpkg-query -W -f='${Version}' k230-kernel-abi)
 MODULE_VERSION=$(chroot "$ROOTFS" dpkg-query -W -f='${Version}' k230-sharp-drm)
 [ "$ABI_VERSION" = "$MODULE_VERSION" ] || fail "kernel ABI and module package versions differ"
+chroot "$ROOTFS" dpkg-query -W cyberdeck-service >/dev/null
+[ -x "$ROOTFS/usr/bin/cyberdeck_daemon" ] || fail "cyberdeck-service daemon is missing"
+[ -f "$ROOTFS/usr/lib/cyberdeck-service/libpebble3-jvm-fat.jar" ] ||
+    fail "cyberdeck-service JVM library is missing"
+[ -x "$ROOTFS/usr/bin/kbd_mode" ] || fail "kbd dependency did not install kbd_mode"
+[ -x "$ROOTFS/usr/bin/java" ] || fail "Java runtime dependency is missing"
+chroot "$ROOTFS" systemctl is-enabled --quiet cyberdeck-service.service ||
+    fail "cyberdeck-service is not enabled"
 chroot "$ROOTFS" systemctl disable \
     systemd-networkd.service systemd-networkd.socket systemd-networkd-wait-online.service \
     wpa_supplicant.service

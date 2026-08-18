@@ -7,6 +7,16 @@
       "package": "network-manager",
       "version": "1.52.1-1",
       "configs": ["k230_canmv_01studio_defconfig"]
+    },
+    {
+      "package": "kbd",
+      "version": "2.7.1-2",
+      "configs": ["k230_canmv_01studio_defconfig"]
+    },
+    {
+      "package": "default-jre-headless",
+      "version": "2:1.21-76",
+      "configs": ["k230_canmv_01studio_defconfig"]
     }
   ]
 }

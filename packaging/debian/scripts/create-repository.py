@@ -56,13 +56,27 @@ def field(path: Path, name: str) -> str:
 
 def fetch_vendor(entry: dict[str, Any], cache: Path, legacy_cache: Path) -> Path:
     destination = cache / entry["file"]
-    if destination.is_file() and sha256_file(destination) == entry["sha256"]:
-        return destination
+    if destination.is_file():
+        actual_sha256 = sha256_file(destination)
+        if actual_sha256 == entry["sha256"]:
+            return destination
+        if not entry["urls"]:
+            fail(
+                f"required local vendor package has the wrong SHA-256: "
+                f"{destination.relative_to(ROOT)}\n"
+                f"  expected: {entry['sha256']}\n"
+                f"  actual:   {actual_sha256}"
+            )
     destination.unlink(missing_ok=True)
     legacy = legacy_cache / entry["file"]
     if legacy.is_file() and sha256_file(legacy) == entry["sha256"]:
         shutil.copy2(legacy, destination)
         return destination
+    if not entry["urls"]:
+        fail(
+            f"required local vendor package is missing: {destination.relative_to(ROOT)}\n"
+            f"  Place {entry['file']} at that path with SHA-256 {entry['sha256']}."
+        )
     errors: list[str] = []
     for url in entry["urls"]:
         temporary = destination.with_suffix(".deb.part")
@@ -111,8 +125,8 @@ def validate_vendor_manifest(value: dict[str, Any]) -> list[dict[str, Any]]:
         tuples.add(key)
         if not entry["install"] and not entry.get("quarantine_reason"):
             fail(f"quarantined vendor package {entry['file']} lacks a reason")
-        if not isinstance(entry["urls"], list) or not entry["urls"]:
-            fail(f"vendor package {entry['file']} has no explicit URL")
+        if not isinstance(entry["urls"], list):
+            fail(f"vendor package {entry['file']} URLs must be an array")
         if len(entry["sha256"]) != 64:
             fail(f"vendor package {entry['file']} has an invalid SHA-256")
     return packages

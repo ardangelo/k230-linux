@@ -92,6 +92,16 @@
       ],
       "install": false,
       "quarantine_reason": "Maintainer scripts have no interpreter and start systemd directly; dpkg cannot configure this package safely in the image chroot."
+    },
+    {
+      "file": "cyberdeck-service_0.1_riscv64.deb",
+      "package": "cyberdeck-service",
+      "version": "0.1",
+      "architecture": "riscv64",
+      "sha256": "9cff79f19b5d2b17d1eebe30c4028cdc0bec7d4695f86214ea5537329c921984",
+      "configs": ["k230_canmv_01studio_defconfig"],
+      "urls": [],
+      "install": true
     }
   ]
 }
