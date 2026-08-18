@@ -222,7 +222,7 @@ def main() -> None:
             "sha256": entry["sha256"],
             "depends": dependency,
             "provenance": "vendor",
-            "url": entry["urls"][0],
+            "url": entry["urls"][0] if entry["urls"] else f"local:{path.relative_to(ROOT)}",
         }
         if entry["install"]:
             validated_vendors.append(record)
