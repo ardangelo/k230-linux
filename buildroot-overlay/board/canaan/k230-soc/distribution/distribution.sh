@@ -184,8 +184,10 @@ distribution_rootfs_replace()
         fi
     fi
     local package_repository="${K230_SDK_ROOT}/output/${CONF}/debian/repository"
+    local distribution_manifest="${K230_SDK_ROOT}/packaging/debian/distribution-packages.json"
     "${K230_SDK_ROOT}/packaging/debian/scripts/install-rootfs-packages.sh" \
-        "${BINARIES_DIR}/${distr_rootfs}" "${package_repository}"
+        "${BINARIES_DIR}/${distr_rootfs}" "${package_repository}" \
+        "${distribution_manifest}" "${CONF}"
     cp ${BINARIES_DIR}/../target/bin/sta.sh ${distr_rootfs}/bin ;
     #cp ${BINARIES_DIR}/../target/bin/adb.sh ${distr_rootfs}/bin ;
     cat  ${BINARIES_DIR}/../target/etc/version/release_version   >> ${distr_rootfs}/etc/issue ;

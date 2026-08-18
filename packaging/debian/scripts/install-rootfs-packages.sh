@@ -1,8 +1,8 @@
 #!/bin/bash
 set -Eeuo pipefail
 
-if [ "$#" -ne 2 ]; then
-    echo "usage: $0 ROOTFS REPOSITORY" >&2
+if [ "$#" -ne 4 ]; then
+    echo "usage: $0 ROOTFS REPOSITORY DISTRIBUTION_MANIFEST CONF" >&2
     exit 2
 fi
 if [ "$(id -u)" -ne 0 ]; then
@@ -12,9 +12,12 @@ fi
 
 ROOTFS=$(realpath "$1")
 REPOSITORY=$(realpath "$2")
+DISTRIBUTION_MANIFEST=$(realpath "$3")
+CONF=$4
 REPOSITORY_MANIFEST="$REPOSITORY/repository-manifest.json"
 TEMP_REPOSITORY=/var/tmp/k230-local-repository
 TEMP_SOURCE=/etc/apt/sources.list.d/k230-local.list
+TEMP_DISTRIBUTION_SOURCE=/etc/apt/sources.list.d/k230-distribution.list
 POLICY_RC=/usr/sbin/policy-rc.d
 MOUNTS=()
 QEMU_STAGED=
@@ -32,6 +35,7 @@ cleanup()
     local status=$?
     rm -rf "$ROOTFS$TEMP_REPOSITORY"
     rm -f "$ROOTFS$TEMP_SOURCE"
+    rm -f "$ROOTFS$TEMP_DISTRIBUTION_SOURCE"
     if [ -n "$SOURCE_BACKUP" ] && [ -e "$SOURCE_BACKUP" ]; then
         mv "$SOURCE_BACKUP" "$ROOTFS$TEMP_SOURCE"
     fi
@@ -56,6 +60,8 @@ trap cleanup EXIT INT TERM
 [ -x "$ROOTFS/bin/true" ] || fail "rootfs lacks executable /bin/true"
 [ -f "$REPOSITORY/Packages" ] || fail "repository lacks Packages index"
 [ -f "$REPOSITORY_MANIFEST" ] || fail "repository manifest is missing"
+[ -f "$DISTRIBUTION_MANIFEST" ] || fail "distribution package manifest is missing"
+[[ "$CONF" =~ ^[A-Za-z0-9._+-]+$ ]] || fail "invalid Buildroot configuration name"
 if ! mountpoint -q /proc/sys/fs/binfmt_misc; then
     mount -t binfmt_misc binfmt_misc /proc/sys/fs/binfmt_misc 2>/dev/null ||
         fail "cannot mount binfmt_misc; run the Debian container with --privileged"
@@ -91,6 +97,47 @@ PY
 KERNEL_RELEASE=${REPOSITORY_VALUES[0]}
 INSTALL_PACKAGES=("${REPOSITORY_VALUES[@]:1}")
 
+mapfile -t DISTRIBUTION_VALUES < <(
+    python3 - "$DISTRIBUTION_MANIFEST" "$CONF" <<'PY'
+import json
+import re
+import sys
+from pathlib import Path
+from urllib.parse import urlparse
+
+value = json.loads(Path(sys.argv[1]).read_text())
+conf = sys.argv[2]
+if value.get("schema_version") != 1:
+    raise SystemExit("unsupported distribution package manifest schema")
+snapshot = value.get("snapshot", "")
+parsed = urlparse(snapshot)
+if parsed.scheme != "https" or parsed.netloc != "snapshot.debian.org":
+    raise SystemExit("distribution snapshot must use snapshot.debian.org over HTTPS")
+suite = value.get("suite", "")
+if not re.fullmatch(r"[a-z0-9][a-z0-9+.-]*", suite):
+    raise SystemExit("invalid distribution suite")
+packages = []
+for entry in value.get("packages", []):
+    if conf not in entry.get("configs", []):
+        continue
+    package = entry.get("package", "")
+    version = entry.get("version", "")
+    if not re.fullmatch(r"[a-z0-9][a-z0-9+.-]+", package):
+        raise SystemExit(f"invalid distribution package name: {package!r}")
+    if not version or any(character.isspace() for character in version):
+        raise SystemExit(f"invalid distribution package version: {version!r}")
+    packages.append(f"{package}={version}")
+if not packages:
+    raise SystemExit(f"no distribution packages selected for {conf}")
+print(snapshot)
+print(suite)
+print(*packages, sep="\n")
+PY
+)
+[ "${#DISTRIBUTION_VALUES[@]}" -gt 2 ] || fail "distribution package manifest has no package allowlist"
+DISTRIBUTION_SNAPSHOT=${DISTRIBUTION_VALUES[0]}
+DISTRIBUTION_SUITE=${DISTRIBUTION_VALUES[1]}
+DISTRIBUTION_PACKAGES=("${DISTRIBUTION_VALUES[@]:2}")
 # A successful foreign-architecture command is required before rootfs mutation.
 if ! chroot "$ROOTFS" /bin/true; then
     INTERPRETER=$(sed -n 's/^interpreter //p' /proc/sys/fs/binfmt_misc/qemu-riscv64)
@@ -136,6 +183,21 @@ install -D -m 0755 /dev/stdin "$ROOTFS$POLICY_RC" <<'POLICY'
 exit 101
 POLICY
 
+install -D -m 0644 /dev/stdin "$ROOTFS$TEMP_DISTRIBUTION_SOURCE" <<APT_SOURCE
+deb [check-valid-until=no] $DISTRIBUTION_SNAPSHOT $DISTRIBUTION_SUITE main
+APT_SOURCE
+DISTRIBUTION_APT_OPTIONS=(
+    -o "Dir::Etc::sourcelist=$TEMP_DISTRIBUTION_SOURCE"
+    -o "Dir::Etc::sourceparts=-"
+    -o "Acquire::Check-Valid-Until=false"
+    -o "Acquire::Languages=none"
+    -o "Acquire::Retries=3"
+)
+chroot "$ROOTFS" apt-get "${DISTRIBUTION_APT_OPTIONS[@]}" update
+chroot "$ROOTFS" apt-get "${DISTRIBUTION_APT_OPTIONS[@]}" --simulate --no-install-recommends install \
+    "${DISTRIBUTION_PACKAGES[@]}"
+DEBIAN_FRONTEND=noninteractive chroot "$ROOTFS" apt-get "${DISTRIBUTION_APT_OPTIONS[@]}" \
+    -y --no-install-recommends install "${DISTRIBUTION_PACKAGES[@]}"
 if [ -e "$ROOTFS$TEMP_SOURCE" ]; then
     SOURCE_BACKUP="$ROOTFS$TEMP_SOURCE.k230-package-backup"
     [ ! -e "$SOURCE_BACKUP" ] || fail "stale local APT source backup exists"
@@ -174,5 +236,20 @@ grep -qF 'updates/sharp-drm.ko:' "$ROOTFS/lib/modules/$KERNEL_RELEASE/modules.de
 ABI_VERSION=$(chroot "$ROOTFS" dpkg-query -W -f='${Version}' k230-kernel-abi)
 MODULE_VERSION=$(chroot "$ROOTFS" dpkg-query -W -f='${Version}' k230-sharp-drm)
 [ "$ABI_VERSION" = "$MODULE_VERSION" ] || fail "kernel ABI and module package versions differ"
+chroot "$ROOTFS" systemctl disable \
+    systemd-networkd.service systemd-networkd.socket systemd-networkd-wait-online.service \
+    wpa_supplicant.service
+chroot "$ROOTFS" systemctl enable NetworkManager.service
+[ -x "$ROOTFS/usr/bin/nmtui" ] || fail "network-manager package did not install nmtui"
+if chroot "$ROOTFS" systemctl is-enabled --quiet systemd-networkd.service; then
+    fail "systemd-networkd remains enabled"
+fi
+if chroot "$ROOTFS" systemctl is-enabled --quiet wpa_supplicant.service; then
+    fail "standalone wpa_supplicant remains enabled"
+fi
+chroot "$ROOTFS" systemctl is-enabled --quiet NetworkManager.service ||
+    fail "NetworkManager is not enabled"
+chroot "$ROOTFS" apt-get clean
+rm -rf "$ROOTFS/var/lib/apt/lists/"*
 
 echo "Installed ${INSTALL_PACKAGES[*]} into $ROOTFS"

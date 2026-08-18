@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "snapshot": "https://snapshot.debian.org/archive/debian/20250809T000000Z",
+  "suite": "trixie",
+  "packages": [
+    {
+      "package": "network-manager",
+      "version": "1.52.1-1",
+      "configs": ["k230_canmv_01studio_defconfig"]
+    }
+  ]
+}
