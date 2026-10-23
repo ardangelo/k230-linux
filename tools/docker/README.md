@@ -135,7 +135,33 @@ Delete it to force a fresh download:
 rm output/$CONF/images/debian13.tar.gz
 ```
 
-### 5. First-class Debian Packages
+### 5. Kernel Debian Package
+
+For updating an existing Debian install without writing a full SD-card image,
+build a local kernel package from the generated `Image`, selected DTB, boot
+symlink, optional `fw_jump_add_uboot_head.bin`, and kernel modules:
+
+```bash
+# Incremental kernel rebuild, then package .deb
+tools/build-kernel-deb.sh
+
+# Force Linux re-extract/re-patch/rebuild first; use after editing Linux patches
+tools/build-kernel-deb.sh --clean
+```
+
+Output: `output/$CONF/images/k230-*-kernel_*_riscv64.deb`.
+
+Install on the target with `/boot` mounted:
+
+```bash
+sudo dpkg -i k230-*-kernel_*_riscv64.deb
+sudo reboot
+```
+
+This package updates Linux boot files and `/lib/modules`; it does not update
+raw U-Boot partitions.
+
+### 6. First-class Debian Packages
 
 The Debian package path independently recompiles Sharp DRM from
 `buildroot-overlay/package/sharp-drm/module/`; it never copies the Buildroot
