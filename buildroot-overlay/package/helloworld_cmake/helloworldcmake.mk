@@ -18,6 +18,7 @@ endef
 
 define HELLOWORLD_CMAKE_BUILD_DEB
 	$(call COPYFILE ,$(TARGET_DIR)/root/app/helloworld,$(@D)/deb/root/app/)
+	mkdir -p $(BINARIES_DIR)/deb
 	dpkg -b  $(@D)/deb  $(BINARIES_DIR)/deb/$(call LOWERCASE, k230-$(PKG)).deb
 endef
 

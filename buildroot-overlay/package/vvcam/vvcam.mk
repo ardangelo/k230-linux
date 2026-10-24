@@ -32,6 +32,7 @@ define VVCAM_BUILD_DEB
 	$(call COPYFILE ,$(TARGET_DIR)/usr/sbin/umtprd,$(@D)/deb/usr/sbin/)
 	$(call COPYFILE ,$(TARGET_DIR)/usr/bin/adbd ,$(@D)/deb/usr/bin/)
 	$(call COPYFILE ,$(TARGET_DIR)/usr/lib/libcrypt.so.2 ,$(@D)/deb/usr/lib/riscv64-linux-gnu/)
+	mkdir -p $(BINARIES_DIR)/deb
 	dpkg -b  $(@D)/deb  $(BINARIES_DIR)/deb/$(call LOWERCASE, k230-$(PKG)).deb
 endef
 

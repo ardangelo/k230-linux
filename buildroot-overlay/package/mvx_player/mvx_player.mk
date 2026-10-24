@@ -34,6 +34,7 @@ define MVX_PLAYER_BUILD_DEB
 	$(call COPYFILE ,$(TARGET_DIR)/usr/bin/mvx_encoder_multi,$(@D)/deb/usr/bin)
 	$(call COPYFILE ,$(TARGET_DIR)/usr/bin/mvx_decoder,$(@D)/deb/usr/bin)
 	$(call COPYFILE ,$(TARGET_DIR)/usr/bin/mvx_decoder_multi,$(@D)/deb/usr/bin)
+	mkdir -p $(BINARIES_DIR)/deb
 	dpkg -b  $(@D)/deb  $(BINARIES_DIR)/deb/$(call LOWERCASE, k230-$(PKG)).deb
 endef
 

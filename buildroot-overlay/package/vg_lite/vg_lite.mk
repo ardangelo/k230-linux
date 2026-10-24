@@ -47,6 +47,7 @@ define VG_LITE_BUILD_DEB
 	$(call COPYFILE ,$(TARGET_DIR)/usr/bin/imgIndex,$(@D)/deb/usr/bin/)
 	$(call COPYFILE ,$(TARGET_DIR)/usr/lib/libvg_lite.so,$(@D)/deb/usr/lib/riscv64-linux-gnu/)
 	$(call COPYFILE ,$(TARGET_DIR)/usr/lib/libvg_lite_util.so,$(@D)/deb/usr/lib/riscv64-linux-gnu/)
+	mkdir -p $(BINARIES_DIR)/deb
 	dpkg -b  $(@D)/deb  $(BINARIES_DIR)/deb/$(call LOWERCASE, k230-$(PKG)).deb
 endef
 
