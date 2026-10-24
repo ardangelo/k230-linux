@@ -177,6 +177,17 @@ The AI-related demos currently integrated are as follows:
 >
 ## FQA
 
+### Cyberdeck GitHub Actions build deadline
+
+`.github/workflows/build-cyberdeck.yml` allows 360 minutes for the entire job,
+including checkout, the Buildroot build, Debian assembly, and artifact upload.
+Checkout cleans the ignored `dl/` and `output/` directories, so each run performs
+a cold build rather than resuming the previous run's compiled output.
+
+Cancellation while compiler output is still progressing can indicate the job
+deadline rather than a package failure. Push workflow changes to start a new
+run; rerunning an old job uses its original workflow and timeout.
+
 ### Debian package output directory on clean builds
 
 Package hooks write their `.deb` files to `output/<CONF>/images/deb/`. Each hook
