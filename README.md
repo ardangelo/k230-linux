@@ -177,6 +177,17 @@ The AI-related demos currently integrated are as follows:
 >
 ## FQA
 
+### Debian package output directory on clean builds
+
+Package hooks write their `.deb` files to `output/<CONF>/images/deb/`. Each hook
+must create that directory before calling `dpkg -b`; relying on another package
+to create it makes clean builds depend on package installation order.
+
+If packaging reports that this directory does not exist, update the package
+recipes and rerun the build. The top-level Makefile synchronizes the recipes
+into Buildroot automatically. For Docker builds, the source tree is bind-mounted,
+so this recipe fix does not require rebuilding the Docker images.
+
 ### how to enable gdb
 
 enable BR2_PACKAGE_GDB and BR2_PACKAGE_GDB_DEBUGGER
