@@ -16,7 +16,7 @@ jobs:
   build:
     name: Build Cyberdeck Images
     runs-on: [self-hosted, linux, x64, k230]
-    timeout-minutes: 180
+    timeout-minutes: 360
 
     defaults:
       run:
