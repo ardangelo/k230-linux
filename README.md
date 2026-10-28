@@ -71,9 +71,27 @@ make savedefconfig #buildroot(sdk) savedefconfig
 ## debian ubuntu
 
 ```bash
-make debian #generate debian distribution image
-make ubuntu #generate ubuntu distribution image
+CONF=k230_canmv_01studio_defconfig
+docker run --rm -v "$PWD:/src" k230-buildroot make CONF="$CONF"
+docker run --rm --privileged -v "$PWD:/src" k230-debian make CONF="$CONF" debian
+# Ubuntu retains its separate baseline assembly:
+make ubuntu
 ```
+
+The Cyberdeck Debian path supports `k230_canmv_01studio_defconfig`. It derives
+the prepared kernel ABI locally and installs the latest candidates from the
+matching signed [Cyberdeck APT archive](https://ardangelo.github.io/cyberdeck-packages/).
+The committed public key scopes trust to that archive; the image retains its
+same-ABI source and four-package preference for later administrator-driven APT
+updates. Rebuilding the same SDK commit may select newer Cyberdeck packages.
+
+The existing Debian base and frozen dependency snapshot/selectors are unchanged.
+Package builds and archive signing belong to the
+[cyberdeck-packages publisher](https://github.com/ardangelo/cyberdeck-packages),
+not an unsigned local repository or a manually provisioned vendor cache. SDK
+`.deb` hook output is not an image APT input. See
+[Debian image packages](packaging/debian/README.md) for build prerequisites,
+ABI/trust policy and transaction failure boundaries.
 
 >The initial image build takes considerable time. If you'd like to skip compilation and try the Linux system directly, you can download the [daily build image provided by Canaan](https://kendryte-download.canaan-creative.com/k230/release/linux_sdk_images/daily_build/)
 >
