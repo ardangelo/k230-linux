@@ -1,104 +1,54 @@
 #!/bin/bash
 set -Eeuo pipefail
 
-if [ "$#" -ne 4 ]; then
-    echo "usage: $0 ROOTFS REPOSITORY DISTRIBUTION_MANIFEST CONF" >&2
-    exit 2
-fi
-if [ "$(id -u)" -ne 0 ]; then
-    echo "install-rootfs-packages: root privileges are required" >&2
-    exit 1
-fi
-
-ROOTFS=$(realpath "$1")
-REPOSITORY=$(realpath "$2")
-DISTRIBUTION_MANIFEST=$(realpath "$3")
-CONF=$4
-REPOSITORY_MANIFEST="$REPOSITORY/repository-manifest.json"
-TEMP_REPOSITORY=/var/tmp/k230-local-repository
-TEMP_SOURCE=/etc/apt/sources.list.d/k230-local.list
-TEMP_DISTRIBUTION_SOURCE=/etc/apt/sources.list.d/k230-distribution.list
-POLICY_RC=/usr/sbin/policy-rc.d
-MOUNTS=()
-QEMU_STAGED=
-POLICY_BACKUP=
-SOURCE_BACKUP=
-
 fail()
 {
     echo "install-rootfs-packages: $*" >&2
     exit 1
 }
 
-cleanup()
-{
-    local status=$?
-    rm -rf "$ROOTFS$TEMP_REPOSITORY"
-    rm -f "$ROOTFS$TEMP_SOURCE"
-    rm -f "$ROOTFS$TEMP_DISTRIBUTION_SOURCE"
-    if [ -n "$SOURCE_BACKUP" ] && [ -e "$SOURCE_BACKUP" ]; then
-        mv "$SOURCE_BACKUP" "$ROOTFS$TEMP_SOURCE"
-    fi
-    rm -f "$ROOTFS$POLICY_RC"
-    if [ -n "$POLICY_BACKUP" ] && [ -e "$POLICY_BACKUP" ]; then
-        mv "$POLICY_BACKUP" "$ROOTFS$POLICY_RC"
-    fi
-    if [ -n "$QEMU_STAGED" ]; then
-        rm -f "$ROOTFS$QEMU_STAGED"
-    fi
-    local index
-    for ((index=${#MOUNTS[@]}-1; index>=0; index--)); do
-        if mountpoint -q "${MOUNTS[$index]}"; then
-            umount -l "${MOUNTS[$index]}"
-        fi
-    done
-    exit "$status"
-}
-trap cleanup EXIT INT TERM
-
+[ "$#" -eq 5 ] || fail "usage: $0 ROOTFS KERNEL_CONTEXT PUBLIC_KEY DISTRIBUTION_MANIFEST CONF"
+[ "$(id -u)" -eq 0 ] || fail "root privileges are required"
+ROOTFS=$(realpath "$1")
+KERNEL_CONTEXT=$(realpath "$2")
+PUBLIC_KEY=$(realpath "$3")
+DISTRIBUTION_MANIFEST=$(realpath "$4")
+CONF=$5
+[ "$CONF" = k230_canmv_01studio_defconfig ] || fail "unsupported Buildroot configuration: $CONF"
 [ -d "$ROOTFS" ] || fail "rootfs does not exist: $ROOTFS"
 [ -x "$ROOTFS/bin/true" ] || fail "rootfs lacks executable /bin/true"
-[ -f "$REPOSITORY/Packages" ] || fail "repository lacks Packages index"
-[ -f "$REPOSITORY_MANIFEST" ] || fail "repository manifest is missing"
+[ -f "$KERNEL_CONTEXT" ] || fail "kernel context is missing"
+[ -f "$PUBLIC_KEY" ] || fail "public key is missing"
 [ -f "$DISTRIBUTION_MANIFEST" ] || fail "distribution package manifest is missing"
-[[ "$CONF" =~ ^[A-Za-z0-9._+-]+$ ]] || fail "invalid Buildroot configuration name"
-if ! mountpoint -q /proc/sys/fs/binfmt_misc; then
-    mount -t binfmt_misc binfmt_misc /proc/sys/fs/binfmt_misc 2>/dev/null ||
-        fail "cannot mount binfmt_misc; run the Debian container with --privileged"
-fi
-if [ ! -r /proc/sys/fs/binfmt_misc/qemu-riscv64 ]; then
-    command -v update-binfmts >/dev/null 2>&1 ||
-        fail "update-binfmts is unavailable; rebuild the k230-debian image"
-    update-binfmts --enable qemu-riscv64 ||
-        fail "cannot register qemu-riscv64; run the Debian container with --privileged"
-fi
-grep -qx enabled /proc/sys/fs/binfmt_misc/qemu-riscv64 ||
-    fail "qemu-riscv64 binfmt is disabled"
 
-mapfile -t REPOSITORY_VALUES < <(
-    python3 - "$REPOSITORY_MANIFEST" <<'PY'
+# Capture producer status before parsing; reject invalid inputs before owned cleanup.
+if ! CONTEXT_OUTPUT=$(python3 - "$KERNEL_CONTEXT" "$CONF" <<'PY'
 import json
 import re
 import sys
 from pathlib import Path
 
 value = json.loads(Path(sys.argv[1]).read_text())
+if value.get("schema_version") != 1 or value.get("conf") != sys.argv[2]:
+    raise SystemExit("kernel context does not match selected configuration")
 release = value.get("kernel_release", "")
-packages = value.get("install_packages", [])
+abi = value.get("abi_sha256", "")
 if not re.fullmatch(r"[A-Za-z0-9._+-]+", release):
-    raise SystemExit("invalid kernel release in repository manifest")
-if not packages or any(not re.fullmatch(r"[a-z0-9][a-z0-9+.-]+", item) for item in packages):
-    raise SystemExit("invalid install package allowlist in repository manifest")
+    raise SystemExit("invalid kernel release in kernel context")
+if not re.fullmatch(r"[0-9a-f]{64}", abi):
+    raise SystemExit("invalid ABI in kernel context")
 print(release)
-print(*packages, sep="\n")
+print(abi)
 PY
-)
-[ "${#REPOSITORY_VALUES[@]}" -gt 1 ] || fail "repository manifest has no package allowlist"
-KERNEL_RELEASE=${REPOSITORY_VALUES[0]}
-INSTALL_PACKAGES=("${REPOSITORY_VALUES[@]:1}")
-
-mapfile -t DISTRIBUTION_VALUES < <(
-    python3 - "$DISTRIBUTION_MANIFEST" "$CONF" <<'PY'
+); then
+    fail "cannot read kernel context"
+fi
+mapfile -t CONTEXT_VALUES <<< "$CONTEXT_OUTPUT"
+KERNEL_RELEASE=${CONTEXT_VALUES[0]}
+ABI=${CONTEXT_VALUES[1]}
+SUITE=trixie-k230-$ABI
+INSTALL_PACKAGES=(cyberdeck-service k230-status-ready k230-sharp-drm k230-kernel-abi)
+if ! DISTRIBUTION_OUTPUT=$(python3 - "$DISTRIBUTION_MANIFEST" "$CONF" <<'PY'
 import json
 import re
 import sys
@@ -133,96 +83,160 @@ print(snapshot)
 print(suite)
 print(*packages, sep="\n")
 PY
-)
-[ "${#DISTRIBUTION_VALUES[@]}" -gt 2 ] || fail "distribution package manifest has no package allowlist"
+); then
+    fail "cannot read distribution packages"
+fi
+mapfile -t DISTRIBUTION_VALUES <<< "$DISTRIBUTION_OUTPUT"
 DISTRIBUTION_SNAPSHOT=${DISTRIBUTION_VALUES[0]}
 DISTRIBUTION_SUITE=${DISTRIBUTION_VALUES[1]}
 DISTRIBUTION_PACKAGES=("${DISTRIBUTION_VALUES[@]:2}")
-# A successful foreign-architecture command is required before rootfs mutation.
+BASELINE_MODULE="$ROOTFS/lib/modules/$KERNEL_RELEASE/updates/sharp-drm.ko"
+[ -f "$BASELINE_MODULE" ] || fail "baseline Sharp DRM module is missing at $BASELINE_MODULE"
+
+POLICY_RC=/usr/sbin/policy-rc.d
+MOUNTS=()
+QEMU_STAGED=
+POLICY_BACKUP=
+POLICY_OWNED=
+TRANSACTION=
+cleanup()
+{
+    local status=$?
+    trap - EXIT INT TERM
+    if [ -n "$POLICY_OWNED" ]; then
+        rm -f "$ROOTFS$POLICY_RC"
+    fi
+    if [ -n "$POLICY_BACKUP" ]; then
+        mv "$POLICY_BACKUP" "$ROOTFS$POLICY_RC"
+    fi
+    if [ -n "$QEMU_STAGED" ]; then
+        rm -f "$ROOTFS$QEMU_STAGED"
+    fi
+    local index
+    for ((index=${#MOUNTS[@]}-1; index>=0; index--)); do
+        umount -R "${MOUNTS[$index]}" || exit 1
+    done
+    if [ -n "$TRANSACTION" ]; then
+        rm -rf "$TRANSACTION"
+    fi
+    exit "$status"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+if ! mountpoint -q /proc/sys/fs/binfmt_misc; then
+    mount -t binfmt_misc binfmt_misc /proc/sys/fs/binfmt_misc 2>/dev/null ||
+        fail "cannot mount binfmt_misc; run the Debian container with --privileged"
+fi
+if [ ! -r /proc/sys/fs/binfmt_misc/qemu-riscv64 ]; then
+    command -v update-binfmts >/dev/null 2>&1 || fail "update-binfmts is unavailable"
+    update-binfmts --enable qemu-riscv64 || fail "cannot register qemu-riscv64"
+fi
+grep -qx enabled /proc/sys/fs/binfmt_misc/qemu-riscv64 || fail "qemu-riscv64 binfmt is disabled"
 if ! chroot "$ROOTFS" /bin/true; then
     INTERPRETER=$(sed -n 's/^interpreter //p' /proc/sys/fs/binfmt_misc/qemu-riscv64)
     FLAGS=$(sed -n 's/^flags: //p' /proc/sys/fs/binfmt_misc/qemu-riscv64)
     [ -n "$INTERPRETER" ] || fail "registered qemu-riscv64 handler has no interpreter"
-    if [[ "$FLAGS" == *F* ]]; then
-        fail "registered fixed qemu-riscv64 interpreter cannot execute the staged rootfs"
-    fi
+    [[ "$FLAGS" != *F* ]] || fail "registered fixed qemu-riscv64 interpreter cannot execute the staged rootfs"
+    [ ! -e "$ROOTFS$INTERPRETER" ] && [ ! -L "$ROOTFS$INTERPRETER" ] ||
+        fail "refusing to overwrite existing QEMU interpreter"
     QEMU=$(command -v qemu-riscv64-static || true)
     [ -n "$QEMU" ] || fail "qemu-riscv64-static is required for non-fixed binfmt registration"
     "$QEMU" -L "$ROOTFS" "$ROOTFS/bin/true" || fail "explicit qemu-riscv64 rootfs smoke test failed"
-    install -D -m 0755 "$QEMU" "$ROOTFS$INTERPRETER"
     QEMU_STAGED=$INTERPRETER
+    install -D -m 0755 "$QEMU" "$ROOTFS$INTERPRETER"
     chroot "$ROOTFS" /bin/true || fail "RISC-V chroot remains unusable after staging QEMU"
 fi
 
 mount_chroot()
 {
-    local source=$1
-    local destination=$2
-    local type=${3:-}
+    local source=$1 destination=$2 type=${3:-}
+    mountpoint -q "$ROOTFS$destination" && return
     mkdir -p "$ROOTFS$destination"
     if [ -n "$type" ]; then
         mount -t "$type" "$source" "$ROOTFS$destination"
     else
         mount --rbind "$source" "$ROOTFS$destination"
-        mount --make-rslave "$ROOTFS$destination"
     fi
     MOUNTS+=("$ROOTFS$destination")
+    [ -n "$type" ] || mount --make-rslave "$ROOTFS$destination"
 }
-
 mount_chroot proc /proc proc
 mount_chroot /sys /sys
 mount_chroot /dev /dev
 
-if [ -e "$ROOTFS$POLICY_RC" ]; then
-    POLICY_BACKUP="$ROOTFS$POLICY_RC.k230-package-backup"
-    [ ! -e "$POLICY_BACKUP" ] || fail "stale policy-rc.d backup exists"
-    mv "$ROOTFS$POLICY_RC" "$POLICY_BACKUP"
+mkdir -p "$ROOTFS/var/tmp"
+TRANSACTION=$(mktemp -d "$ROOTFS/var/tmp/k230-install.XXXXXXXX")
+TEMP_DIR=${TRANSACTION#"$ROOTFS"}
+chmod 0755 "$TRANSACTION"
+if [ -e "$ROOTFS$POLICY_RC" ] || [ -L "$ROOTFS$POLICY_RC" ]; then
+    mv "$ROOTFS$POLICY_RC" "$TRANSACTION/policy-rc.d"
+    POLICY_BACKUP="$TRANSACTION/policy-rc.d"
 fi
+POLICY_OWNED=1
 install -D -m 0755 /dev/stdin "$ROOTFS$POLICY_RC" <<'POLICY'
 #!/bin/sh
 exit 101
 POLICY
 
-install -D -m 0644 /dev/stdin "$ROOTFS$TEMP_DISTRIBUTION_SOURCE" <<APT_SOURCE
-deb [check-valid-until=no] $DISTRIBUTION_SNAPSHOT $DISTRIBUTION_SUITE main
+install -D -m 0644 "$KERNEL_CONTEXT" "$ROOTFS/usr/share/k230/kernel-context.json"
+printf '%s\n' "$ABI" > "$ROOTFS/usr/share/k230/kernel-abi"
+install -D -m 0644 "$PUBLIC_KEY" "$ROOTFS/etc/apt/keyrings/cyberdeck-archive.asc"
+cat > "$TRANSACTION/cyberdeck.sources" <<APT_SOURCE
+Types: deb
+URIs: https://ardangelo.github.io/cyberdeck-packages/
+Suites: $SUITE
+Components: main
+Architectures: riscv64
+Signed-By: /etc/apt/keyrings/cyberdeck-archive.asc C0713A2A6C3A2279E125646BFD377548A4F82392
 APT_SOURCE
-DISTRIBUTION_APT_OPTIONS=(
-    -o "Dir::Etc::sourcelist=$TEMP_DISTRIBUTION_SOURCE"
-    -o "Dir::Etc::sourceparts=-"
-    -o "Acquire::Check-Valid-Until=false"
-    -o "Acquire::Languages=none"
-    -o "Acquire::Retries=3"
-)
-chroot "$ROOTFS" apt-get "${DISTRIBUTION_APT_OPTIONS[@]}" update
-chroot "$ROOTFS" apt-get "${DISTRIBUTION_APT_OPTIONS[@]}" --simulate --no-install-recommends install \
-    "${DISTRIBUTION_PACKAGES[@]}"
-DEBIAN_FRONTEND=noninteractive chroot "$ROOTFS" apt-get "${DISTRIBUTION_APT_OPTIONS[@]}" \
-    -y --no-install-recommends install "${DISTRIBUTION_PACKAGES[@]}"
-if [ -e "$ROOTFS$TEMP_SOURCE" ]; then
-    SOURCE_BACKUP="$ROOTFS$TEMP_SOURCE.k230-package-backup"
-    [ ! -e "$SOURCE_BACKUP" ] || fail "stale local APT source backup exists"
-    mv "$ROOTFS$TEMP_SOURCE" "$SOURCE_BACKUP"
-fi
-cp -a "$REPOSITORY" "$ROOTFS$TEMP_REPOSITORY"
-install -D -m 0644 /dev/stdin "$ROOTFS$TEMP_SOURCE" <<APT_SOURCE
-deb [trusted=yes] file:$TEMP_REPOSITORY ./
-APT_SOURCE
+cp "$TRANSACTION/cyberdeck.sources" "$TRANSACTION/k230-install.sources"
+cat >> "$TRANSACTION/k230-install.sources" <<APT_SOURCE
 
+Types: deb
+URIs: ${DISTRIBUTION_SNAPSHOT%/}/
+Suites: $DISTRIBUTION_SUITE
+Components: main
+Architectures: riscv64
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+Check-Valid-Until: no
+APT_SOURCE
+install -D -m 0644 /dev/stdin "$ROOTFS/etc/apt/preferences.d/cyberdeck" <<APT_PREFERENCES
+Package: cyberdeck-service k230-status-ready k230-sharp-drm k230-kernel-abi
+Pin: release o=Cyberdeck,n=$SUITE
+Pin-Priority: 500
+
+Package: *
+Pin: release o=Cyberdeck
+Pin-Priority: -1
+APT_PREFERENCES
+mkdir -p "$TRANSACTION/lists/partial" "$TRANSACTION/cache/archives/partial"
 APT_OPTIONS=(
-    -o "Dir::Etc::sourcelist=$TEMP_SOURCE"
+    -o "Dir::Etc::sourcelist=$TEMP_DIR/k230-install.sources"
     -o "Dir::Etc::sourceparts=-"
+    -o "Dir::State::lists=$TEMP_DIR/lists"
+    -o "Dir::Cache=$TEMP_DIR/cache"
+    -o "Acquire::Check-Valid-Until=true"
+    -o "Acquire::AllowInsecureRepositories=false"
+    -o "APT::Get::AllowUnauthenticated=false"
+    -o "APT::Update::Error-Mode=any"
     -o "Acquire::Languages=none"
     -o "Acquire::Retries=0"
 )
 chroot "$ROOTFS" apt-get "${APT_OPTIONS[@]}" update
-# Resolve the complete transaction before removing the unowned baseline module.
-chroot "$ROOTFS" apt-get "${APT_OPTIONS[@]}" --simulate --no-install-recommends install "${INSTALL_PACKAGES[@]}"
-
-BASELINE_MODULE="$ROOTFS/lib/modules/$KERNEL_RELEASE/updates/sharp-drm.ko"
-[ -f "$BASELINE_MODULE" ] || fail "baseline Sharp DRM module is missing at $BASELINE_MODULE"
+# Record candidates using the very same authenticated transaction lists.
+chroot "$ROOTFS" apt-cache "${APT_OPTIONS[@]}" policy "${INSTALL_PACKAGES[@]}"
+chroot "$ROOTFS" apt-get "${APT_OPTIONS[@]}" --simulate --no-install-recommends install \
+    "${INSTALL_PACKAGES[@]}" "${DISTRIBUTION_PACKAGES[@]}"
+DEBIAN_FRONTEND=noninteractive chroot "$ROOTFS" apt-get "${APT_OPTIONS[@]}" \
+    -y --download-only --reinstall --no-install-recommends install \
+    "${INSTALL_PACKAGES[@]}" "${DISTRIBUTION_PACKAGES[@]}"
+# Baseline bytes survive all authentication, resolution and download failures.
 rm -f "$BASELINE_MODULE"
-
-DEBIAN_FRONTEND=noninteractive chroot "$ROOTFS" apt-get "${APT_OPTIONS[@]}" -y --no-install-recommends install "${INSTALL_PACKAGES[@]}"
+DEBIAN_FRONTEND=noninteractive chroot "$ROOTFS" apt-get "${APT_OPTIONS[@]}" \
+    -y --no-download --reinstall --no-install-recommends install \
+    "${INSTALL_PACKAGES[@]}" "${DISTRIBUTION_PACKAGES[@]}"
 DEBIAN_FRONTEND=noninteractive chroot "$ROOTFS" dpkg --configure -a
 AUDIT=$(chroot "$ROOTFS" dpkg --audit)
 [ -z "$AUDIT" ] || fail "dpkg audit failed: $AUDIT"
@@ -257,7 +271,19 @@ if chroot "$ROOTFS" systemctl is-enabled --quiet wpa_supplicant.service; then
 fi
 chroot "$ROOTFS" systemctl is-enabled --quiet NetworkManager.service ||
     fail "NetworkManager is not enabled"
-chroot "$ROOTFS" apt-get clean
-rm -rf "$ROOTFS/var/lib/apt/lists/"*
 
+VERMAGIC=$(chroot "$ROOTFS" modinfo -F vermagic "/lib/modules/$KERNEL_RELEASE/updates/sharp-drm.ko")
+[ "${VERMAGIC%% *}" = "$KERNEL_RELEASE" ] || fail "Sharp DRM vermagic does not match kernel release"
+python3 - "$ROOTFS/usr/share/k230-kernel-abi/kernel-context.json" "$ABI" <<'PY'
+import json
+import sys
+from pathlib import Path
+if json.loads(Path(sys.argv[1]).read_text()).get("abi_sha256") != sys.argv[2]:
+    raise SystemExit("installed marker does not match image ABI")
+PY
+[ -x "$ROOTFS/usr/bin/k230-status-ready" ] || fail "readiness helper is missing"
+chroot "$ROOTFS" systemctl is-enabled --quiet k230-status-ready.service || fail "readiness service is not enabled"
+install -D -m 0644 "$TRANSACTION/cyberdeck.sources" "$ROOTFS/etc/apt/sources.list.d/cyberdeck.sources"
+chroot "$ROOTFS" dpkg-query -W -f='${Package} ${Version} ${Architecture}\n' \
+    "${INSTALL_PACKAGES[@]}" "${DISTRIBUTION_PACKAGES[@]%%=*}"
 echo "Installed ${INSTALL_PACKAGES[*]} into $ROOTFS"

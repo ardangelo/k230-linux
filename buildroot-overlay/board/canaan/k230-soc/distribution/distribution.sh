@@ -1,6 +1,6 @@
 #!/bin/bash
 distribution_type="$1"
-BRW_BUILD_DIR="$2"
+BRW_BUILD_DIR=$(realpath "$2")
 BINARIES_DIR="${BRW_BUILD_DIR}/images"
 
 set -e;
@@ -147,13 +147,25 @@ get_image_last_name()
 #$3  dist_rootfs_ext4 http sit
 #$3  dist_rootfs_ext4.tar.gz md5
 distribution_rootfs_replace()
-{
+(
     local distname="$1"
     local distr_rootfs="$2"  # debian13
     local distr_rootfs_web_site="$3" #
     local md5_v="$4"
     local dist_img_name="${distname}.img"      #debian.img
     local K230_SDK_ROOT=$(dirname $(dirname ${BRW_BUILD_DIR}))
+    local CONF=$(basename "$BRW_BUILD_DIR")
+    local ROOTFS_STAGE= ROOTFS_DIR= CONTEXT_TEMP=
+    trap '
+        [ -z "$CONTEXT_TEMP" ] || rm -f "$CONTEXT_TEMP"
+        if [ -n "$ROOTFS_STAGE" ]; then
+            if mountpoint -q "$ROOTFS_DIR/proc" || mountpoint -q "$ROOTFS_DIR/sys" || mountpoint -q "$ROOTFS_DIR/dev"; then
+                print_red "retaining mounted staging directory: $ROOTFS_STAGE"
+            else
+                rm -rf "$ROOTFS_STAGE"
+            fi
+        fi
+    ' EXIT
 
     if [ "$(id -u)" -ne 0 ]; then
         print_red "permission denied,you need root privileges,example: sudo make debian"
@@ -163,52 +175,74 @@ distribution_rootfs_replace()
         print_red "you need first build buildroot: make buildroot"
         exit 1;
     fi
+    local kernel_context="${BRW_BUILD_DIR}/debian/kernel-context.json"
+    if [ "$distname" = debian ]; then
+        [ "$CONF" = k230_canmv_01studio_defconfig ] || {
+            print_red "unsupported Debian configuration: $CONF"
+            exit 1
+        }
+        mkdir -p "$(dirname "$kernel_context")"
+        CONTEXT_TEMP=$(mktemp "${kernel_context}.XXXXXXXX")
+        if ! python3 "$K230_SDK_ROOT/packaging/debian/scripts/kernel-context.py" \
+            --sdk-root "$K230_SDK_ROOT" --conf "$CONF" > "$CONTEXT_TEMP"; then
+            print_red "kernel context generation failed"
+            exit 1
+        fi
+        mv "$CONTEXT_TEMP" "$kernel_context"
+        CONTEXT_TEMP=
+    fi
 
 
     #set -x;
     cd ${BINARIES_DIR};
-    cp sysimage-sdcard.img ${dist_img_name};
 
     [ -f ${distr_rootfs}.tar.gz ] || wget  ${distr_rootfs_web_site}  -O  ${distr_rootfs}.tar.gz
 
     [ "${md5_v}" = "$(md5sum ${distr_rootfs}.tar.gz | cut -d' ' -f1 )" ]  || (print_red " ${distr_rootfs}.tar.gz error !" ;exit 1)
 
-    rm -rf ${distr_rootfs};tar --no-same-owner --exclude='*/dev/*' -xf ${distr_rootfs}.tar.gz
-    cp ${BINARIES_DIR}/../target/lib/modules ${distr_rootfs}/lib -r;
+    ROOTFS_STAGE=$(mktemp -d)
+    ROOTFS_STAGE=$(realpath "$ROOTFS_STAGE")
+    ROOTFS_DIR="$ROOTFS_STAGE/$distr_rootfs"
+    tar --no-same-owner --exclude='*/dev/*' -xf "${distr_rootfs}.tar.gz" -C "$ROOTFS_STAGE"
+    cp "${BINARIES_DIR}/../target/lib/modules" "$ROOTFS_DIR/lib" -r;
     if [ -d ${BINARIES_DIR}/../target/lib/firmware ]; then
-        mkdir -p ${distr_rootfs}/lib/firmware;
-        cp -a ${BINARIES_DIR}/../target/lib/firmware/. ${distr_rootfs}/lib/firmware/;
+        mkdir -p "$ROOTFS_DIR/lib/firmware";
+        cp -a "${BINARIES_DIR}/../target/lib/firmware/." "$ROOTFS_DIR/lib/firmware/";
         if [ -d ${BINARIES_DIR}/../target/lib/firmware/aic8800D80 ]; then
-            mkdir -p ${distr_rootfs}/etc/modprobe.d;
-            printf '%s\n' 'options aic8800_bsp aic_fw_path=/lib/firmware/aic8800D80' > ${distr_rootfs}/etc/modprobe.d/aic8800.conf;
+            mkdir -p "$ROOTFS_DIR/etc/modprobe.d";
+            printf '%s\n' 'options aic8800_bsp aic_fw_path=/lib/firmware/aic8800D80' > "$ROOTFS_DIR/etc/modprobe.d/aic8800.conf";
         fi
     fi
-    local package_repository="${K230_SDK_ROOT}/output/${CONF}/debian/repository"
-    local distribution_manifest="${K230_SDK_ROOT}/packaging/debian/distribution-packages.json"
-    "${K230_SDK_ROOT}/packaging/debian/scripts/install-rootfs-packages.sh" \
-        "${BINARIES_DIR}/${distr_rootfs}" "${package_repository}" \
-        "${distribution_manifest}" "${CONF}"
-    cp ${BINARIES_DIR}/../target/bin/sta.sh ${distr_rootfs}/bin ;
-    #cp ${BINARIES_DIR}/../target/bin/adb.sh ${distr_rootfs}/bin ;
-    cat  ${BINARIES_DIR}/../target/etc/version/release_version   >> ${distr_rootfs}/etc/issue ;
+    if [ "$distname" = debian ]; then
+        if ! "${K230_SDK_ROOT}/packaging/debian/scripts/install-rootfs-packages.sh" \
+            "$ROOTFS_DIR" "$kernel_context" \
+            "${K230_SDK_ROOT}/packaging/debian/keys/cyberdeck-archive.asc" \
+            "${K230_SDK_ROOT}/packaging/debian/distribution-packages.json" "$CONF"; then
+            print_red "Debian package installation failed; SD image was not replaced"
+            exit 1
+        fi
+    fi
+    cp "${BINARIES_DIR}/../target/bin/sta.sh" "$ROOTFS_DIR/bin";
+    cat "${BINARIES_DIR}/../target/etc/version/release_version" >> "$ROOTFS_DIR/etc/issue";
 
-    cp ${BINARIES_DIR}/../target/usr/lib/libjpeg.so.9  -fL ${distr_rootfs}/usr/lib/riscv64-linux-gnu/ ;
-    cp ${BINARIES_DIR}/../target/usr/lib/libcrypt.so.2  -rfL ${distr_rootfs}/usr/lib/riscv64-linux-gnu/ ;
+    cp "${BINARIES_DIR}/../target/usr/lib/libjpeg.so.9" -fL "$ROOTFS_DIR/usr/lib/riscv64-linux-gnu/";
+    cp "${BINARIES_DIR}/../target/usr/lib/libcrypt.so.2" -rfL "$ROOTFS_DIR/usr/lib/riscv64-linux-gnu/";
 
-    mkdir -p ${distr_rootfs}/etc/vvcam;
-    cp ${BINARIES_DIR}/../target/etc/init.d/S99adb_mtp -rf ${distr_rootfs}/etc/vvcam/S99adb_mtp;
-    cp ${BINARIES_DIR}/../target/etc/umtprd  -rf ${distr_rootfs}/etc/;
-    cp ${BINARIES_DIR}/../target/usr/sbin/umtprd  -rf ${distr_rootfs}/usr/sbin/;
-    cp ${BINARIES_DIR}/../target/usr/bin/adbd  -rf ${distr_rootfs}/usr/bin/;
-    cd ${distr_rootfs}; rm -rf app ; ln -s root/app app; cd -;
+    mkdir -p "$ROOTFS_DIR/etc/vvcam";
+    cp "${BINARIES_DIR}/../target/etc/init.d/S99adb_mtp" -rf "$ROOTFS_DIR/etc/vvcam/S99adb_mtp";
+    cp "${BINARIES_DIR}/../target/etc/umtprd" -rf "$ROOTFS_DIR/etc/";
+    cp "${BINARIES_DIR}/../target/usr/sbin/umtprd" -rf "$ROOTFS_DIR/usr/sbin/";
+    cp "${BINARIES_DIR}/../target/usr/bin/adbd" -rf "$ROOTFS_DIR/usr/bin/";
+    rm -rf "$ROOTFS_DIR/app"; ln -s root/app "$ROOTFS_DIR/app";
 
 
     { # generate ${distr_rootfs}.ext4
         rm -rf ${distr_rootfs}.ext4;
-        local rootfs_size="$(( "$(sudo du -sm ${distr_rootfs} | cut -f1 )" + 300 ))"
-        mkfs.ext4  -d ${distr_rootfs}  -r 1 -N 0 -m 1 -L "rootfs"  ${distr_rootfs}.ext4 ${rootfs_size}m
+        local rootfs_size="$(( "$(du -sm "$ROOTFS_DIR" | cut -f1)" + 300 ))"
+        mkfs.ext4 -d "$ROOTFS_DIR" -r 1 -N 0 -m 1 -L "rootfs" "${distr_rootfs}.ext4" "${rootfs_size}m"
     }
 
+    cp sysimage-sdcard.img "$dist_img_name";
     {
         #resize  img
         local img_size=$(( $(wc -c  ${distr_rootfs}.ext4 | awk '{print $1 }')   +  $(wc -c  ${dist_img_name} | awk '{print $1}') ))
@@ -238,8 +272,8 @@ distribution_rootfs_replace()
     print_blue "build successfull : ${BINARIES_DIR}/${last_name}"
     chmod a+w ${distr_rootfs}.tar.gz  ${dist_img_name}.gz  ${last_name}
 
-    rm -rf ${distr_rootfs} ${distr_rootfs}.ext4;
-}
+    rm -f "${distr_rootfs}.ext4";
+)
 if [ "$(id -u)" -ne 0 ]; then
     print_red "permission denied,you need root privileges,example: sudo make debian"
     exit 1;

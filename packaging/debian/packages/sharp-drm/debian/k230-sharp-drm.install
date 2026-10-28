@@ -1,3 +1,0 @@
-lib/modules/*/updates/sharp-drm.ko
-etc/modules-load.d/k230-sharp-drm.conf
-etc/modprobe.d/k230-sharp-drm.conf
