@@ -19,3 +19,4 @@ gtags.files
 df/
 .vscode/settings.json
 __pycache__/
+/cyberdeck-packages/

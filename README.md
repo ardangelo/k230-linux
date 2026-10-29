@@ -29,7 +29,29 @@ from the signed [cyberdeck-packages APT repository](https://ardangelo.github.io/
 The publisher must release a matching `trixie-k230-<ABI>` suite before assembly.
 Debian dependencies use live trixie, trixie-updates and trixie-security sources;
 consumer dependency versions are not pinned. The installer interface is
-`install-rootfs-packages.sh ROOTFS KERNEL_CONTEXT PUBLIC_KEY`.
+`install-rootfs-packages.sh ROOTFS KERNEL_CONTEXT PUBLIC_KEY`. Assembly creates
+the retained USB integration directory itself. During chroot installation, the
+installer supplies the container resolver and restores the archived resolver
+alongside its temporary policy/QEMU state before image creation.
+
+### Cyberdeck Docker build
+
+Place the [Xuantie toolchain archive](https://download.kendryte.com/k230/downloads/dl/gcc/Xuantie-900-gcc-linux-6.6.0-glibc-x86_64-V3.0.2-20250410.tar.gz)
+in `tools/docker/buildroot/`, then run from the repository root:
+
+```bash
+docker build -f tools/docker/buildroot/Dockerfile -t k230-buildroot tools/docker/buildroot
+docker build -f tools/docker/debian/Dockerfile -t k230-debian tools/docker/debian
+CONF=k230_canmv_01studio_defconfig
+docker run --rm -v "$PWD:/src" k230-buildroot make CONF="$CONF" dl
+docker run --rm -v "$PWD:/src" k230-buildroot make CONF="$CONF"
+docker run --rm --privileged -v "$PWD:/src" k230-debian make CONF="$CONF" debian
+```
+
+The Debian container adds QEMU/binfmt and kmod to the compiler environment.
+Privileged assembly is required for the real RISC-V chroot and its temporary
+mounts. `Build Cyberdeck` runs the same source fetch, Buildroot and Debian
+commands and uploads `sysimage-sdcard.img.gz` and `debian.img.gz`.
 
 ## Install Toolchain and Dependencies
 

@@ -1,0 +1,74 @@
+name: Build Cyberdeck
+
+on:
+  push:
+    branches: [cyberdeck]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cyberdeck-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build Cyberdeck Images
+    runs-on: [self-hosted, linux, x64, k230]
+    timeout-minutes: 360
+
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      CONF: k230_canmv_01studio_defconfig
+
+    steps:
+      - name: Checkout source
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Download Buildroot sources
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/src" \
+            k230-buildroot \
+            make CONF="$CONF" dl
+
+      - name: Build Buildroot image
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/src" \
+            k230-buildroot \
+            make CONF="$CONF"
+
+      - name: Build Debian image
+        run: |
+          docker run --rm --privileged \
+            -v "$GITHUB_WORKSPACE:/src" \
+            k230-debian \
+            make CONF="$CONF" debian
+
+      - name: Restore workspace ownership
+        if: ${{ always() && steps.checkout.outcome == 'success' }}
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/src" \
+            k230-buildroot \
+            chown -R "$(id -u):$(id -g)" /src
+
+      - name: Upload images
+        uses: actions/upload-artifact@v4
+        with:
+          name: cyberdeck-images-${{ github.sha }}
+          path: |
+            output/${{ env.CONF }}/images/sysimage-sdcard.img.gz
+            output/${{ env.CONF }}/images/debian.img.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
