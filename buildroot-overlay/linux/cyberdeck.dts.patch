@@ -1,0 +1,159 @@
+diff --git a/arch/riscv/boot/dts/canaan/cyberdeck.dts b/arch/riscv/boot/dts/canaan/cyberdeck.dts
+new file mode 100644
+index 000000000..6ae6c638a
+--- /dev/null
++++ b/arch/riscv/boot/dts/canaan/cyberdeck.dts
+@@ -0,0 +1,153 @@
++// SPDX-License-Identifier: GPL-2.0 OR MIT
++/*
++ * Copyright (C) 2024 Yangyu Chen <cyy@cyyself.name>
++ */
++
++#include <dt-bindings/gpio/gpio.h>
++#include "k230.dtsi"
++
++/ {
++	model = "Canaan CanMV-K230";
++	compatible = "canaan,canmv-k230", "canaan,kendryte-k230";
++
++	aliases {
++		serial3 = &uart3;
++		i2c0 = &i2c4;
++		i2c1 = &i2c3;
++		mmc0 = &mmc_sd0;
++		mmc1 = &mmc_sd1;
++               spi2 = &spi2;
++	};
++
++	chosen {
++		stdout-path = "serial0:115200n8";
++	};
++
++	ddr: memory@0 {
++		device_type = "memory";
++		reg = <0x0 0x0 0x0 0x40000000>;
++	};
++
++	sound {
++		status                      = "okay";
++		compatible                  = "canaan,k230-audio-inno";
++		canaan,model                = "K230_I2S_INNO";
++		canaan,k230-i2s-controller  = <&i2s>;
++		canaan,k230-audio-codec     = <&inno_codec>;
++	};
++
++	pwrseq_wifi: pwrseq_wifi@0 {
++		compatible = "mmc-pwrseq-simple";
++		reset-gpios = <&gpio1_ports 21 GPIO_ACTIVE_LOW>;
++	    post-power-on-delay-ms = <200>;
++	};
++
++	k230_status: k230-status {
++		compatible = "cyberdeck,k230-status";
++		status-gpios = <&gpio0_ports 25 GPIO_ACTIVE_HIGH>;
++	};
++};
++
++&iomux {
++	/delete-property/ pinctrl-names;
++	/delete-property/ pinctrl-0;
++};
++
++&uart0 {
++	status = "okay";
++};
++&uart1 {
++	status = "okay";
++};
++&uart3 {
++	status = "okay";
++};
++&uart4 {
++	status = "okay";
++};
++&mmc_sd0{
++	status = "okay";
++	no-1-8-v;
++	cap-sd-highspeed;
++	rx_delay_line = <0x0d>;
++	tx_delay_line = <0xb0>;
++	clocks = <&sd0_cclk_gate>,<&sd0_cclk_gate>;
++	clock-names = "core", "bus";
++};
++&mmc_sd1 {
++    status = "okay";
++    bus-width = <4>;
++    no-1-8-v;
++    cap-sd-highspeed;
++    disable-wp;
++    mmc-pwrseq = <&pwrseq_wifi>;
++    non-removable;
++    supports-sdio;
++    keep-power-in-suspend;
++
++    rx_delay_line = <0x0d>;
++    tx_delay_line = <0xb0>;
++    clocks = <&sd1_cclk_gate>, <&sd1_cclk_gate>;
++    clock-names = "core", "bus";
++
++    mmc_aic8800d: wifi@1 {
++        compatible = "aic8800";
++        reg = <1>;
++        wifi_chip_type = "aic8800";
++        //irq-gpios = <&gpio0 53 GPIO_ACTIVE_HIGH>;
++        clocks = <&sd1_cclk_gate>;
++        clock-names = "sdio_clk";
++        status = "okay";
++    };
++};
++&usb0 {
++	status = "okay";
++};
++&usb1 {
++	dr_mode = "host";
++	status = "okay";
++};
++
++&i2c4
++{
++	status = "okay";
++};
++
++&i2c3
++{
++	status = "okay";
++};
++
++&vo {
++	vth_line = <10>;
++};
++
++&spi0 {
++    compatible = "canaan,k230-spi";
++    status = "okay";
++    cs-gpios = <&gpio0_ports 14 GPIO_ACTIVE_HIGH>;
++
++    sharp_drm: sharp_drm@0 {
++        compatible = "sharp-drm";
++        //reg = <0x0 0x91584000 0x0 0x1000>;
++        reg = <0>;
++
++        disp-gpios = <&gpio0_ports 19 0>;
++
++        spi-cs-high = <0>;
++        spi-max-frequency = <4000000>;
++        buswidth = <8>;
++    };
++};
++
++&spi2 {
++    compatible = "canaan,k230-spi";
++    status = "okay";
++
++    spidev1: spidev@0 {
++        compatible = "linux,spidev";
++        reg = <0>;
++        spi-max-frequency = <4000000>;
++        status = "okay";
++    };
++};

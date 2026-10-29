@@ -1,0 +1,26 @@
+#!/bin/sh
+# Mark the Cyberdeck K230 application stack ready for the nRF power controller.
+
+case "$1" in
+  start)
+    printf "Setting K230 status ready: "
+    if /usr/bin/k230-status-ready 1; then
+      echo "OK"
+    else
+      echo "FAIL"
+      exit 1
+    fi
+    ;;
+  stop)
+    # The kernel poweroff prepare handler is the authoritative shutdown path.
+    ;;
+  restart|reload)
+    "$0" start
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart|reload}" >&2
+    exit 1
+    ;;
+esac
+
+exit 0

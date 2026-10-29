@@ -7,6 +7,15 @@
 
 > This document uses the `k230d_canmv_defconfig` configuration as an example. If you use a different configuration, replace `k230d_canmv_defconfig` with the appropriate name. All supported configurations can be found in the `buildroot-overlay/configs/` directory.
 
+## Cyberdeck board profile
+
+Use `CONF=k230_canmv_01studio_defconfig` for Cyberdeck. This profile selects
+`canaan/cyberdeck`, the upstream kernel fragments followed by
+`fragment/linux.cyberdeck`, and the Sharp DRM and status-readiness packages.
+U-Boot establishes the Cyberdeck pin mux and 1.8 V banks; the board DTS leaves
+that mux intact. GPIO25 stays low through U-Boot handoff and is managed by the
+kernel status driver and readiness helper after boot.
+
 ## Install Toolchain and Dependencies
 
 ```bash

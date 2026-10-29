@@ -1,0 +1,52 @@
+#!/bin/sh
+# Write the Cyberdeck K230 status driver's ready sysfs attribute.
+
+set -u
+
+VALUE="${1:-1}"
+READY_FILE="${K230_STATUS_READY_SYSFS:-}"
+
+case "$VALUE" in
+  0|1|false|true|off|on|no|yes) ;;
+  *)
+    echo "Usage: $0 [0|1]" >&2
+    exit 2
+    ;;
+esac
+
+find_ready_file()
+{
+  for candidate in /sys/bus/platform/devices/*/ready; do
+    [ -e "$candidate" ] || continue
+
+    node_dir="${candidate%/ready}/of_node"
+    if [ -r "$node_dir/compatible" ] && \
+       tr '\000' '\n' < "$node_dir/compatible" | grep -qx 'cyberdeck,k230-status'; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+
+  for candidate in /sys/bus/platform/devices/*/ready; do
+    [ -e "$candidate" ] || continue
+    echo "$candidate"
+    return 0
+  done
+
+  return 1
+}
+
+if [ -z "$READY_FILE" ]; then
+  READY_FILE="$(find_ready_file)" || {
+    echo "k230-status-ready: ready sysfs attribute not found" >&2
+    exit 1
+  }
+fi
+
+if [ ! -w "$READY_FILE" ]; then
+  echo "k230-status-ready: $READY_FILE is not writable" >&2
+  exit 1
+fi
+
+printf '%s\n' "$VALUE" > "$READY_FILE"
+echo "k230-status-ready: wrote $VALUE to $READY_FILE"
