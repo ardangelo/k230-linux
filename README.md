@@ -16,6 +16,21 @@ U-Boot establishes the Cyberdeck pin mux and 1.8 V banks; the board DTS leaves
 that mux intact. GPIO25 stays low through U-Boot handoff and is managed by the
 kernel status driver and readiness helper after boot.
 
+The Cyberdeck profile omits the SDK NNCase/KPU demos, models, OpenCV and
+Python-K230 wheel. Ordinary Python, camera/media, audio, USB and wireless
+packages remain available. The general SDK examples remain selected; only their
+OpenCV example follows `BR2_PACKAGE_OPENCV4`. Retained DRM examples select libpng
+directly, and the camera RTSP package creates its own install directory.
+
+Debian assembly supports this profile only. It preserves the vendor Debian
+base archive, derives the local kernel ABI with
+`packaging/debian/scripts/kernel-context.py`, and installs Cyberdeck packages
+from the signed [cyberdeck-packages APT repository](https://ardangelo.github.io/cyberdeck-packages/).
+The publisher must release a matching `trixie-k230-<ABI>` suite before assembly.
+Debian dependencies use live trixie, trixie-updates and trixie-security sources;
+consumer dependency versions are not pinned. The installer interface is
+`install-rootfs-packages.sh ROOTFS KERNEL_CONTEXT PUBLIC_KEY`.
+
 ## Install Toolchain and Dependencies
 
 ```bash

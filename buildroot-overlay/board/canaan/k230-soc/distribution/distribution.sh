@@ -3,7 +3,8 @@
 # Usage: distribution.sh <distribution_type> <BRW_BUILD_DIR>
 
 distribution_type="$1"
-BRW_BUILD_DIR="$2"
+BRW_BUILD_DIR=$(realpath "$2")
+CONF=$(basename "$BRW_BUILD_DIR")
 BINARIES_DIR="${BRW_BUILD_DIR}/images"
 K230_SDK_ROOT=$(cd "$(dirname "$(dirname "${BRW_BUILD_DIR}")")" && pwd)
 
@@ -125,7 +126,7 @@ get_image_last_name() {
 # $2: dist_rootfs tarball name (debian13/ubuntu24)
 # $3: dist_rootfs tarball URL
 # $4: dist_rootfs tarball MD5 checksum
-distribution_rootfs_replace() {
+distribution_rootfs_replace() (
     local distname="$1"
     local distr_rootfs="$2"
     local distr_rootfs_url="$3"
@@ -148,8 +149,11 @@ distribution_rootfs_replace() {
 
     cd "${BINARIES_DIR}"
 
-    # Copy base image
-    cp sysimage-sdcard.img "${dist_img_name}"
+    # Ubuntu retains the upstream image assembly order. Debian copies the SD
+    # image only after package installation and ext4 creation succeed.
+    if [ "$distname" = ubuntu ]; then
+        cp sysimage-sdcard.img "${dist_img_name}"
+    fi
 
     # Download and verify rootfs tarball
     if [ ! -f "${distr_rootfs}.tar.gz" ]; then
@@ -168,116 +172,129 @@ distribution_rootfs_replace() {
 
     # Extract rootfs
     print_blue "Extracting rootfs (this may take a while)..."
-    rm -rf "${distr_rootfs}"
-    tar -xf "${distr_rootfs}.tar.gz"
+    local ROOTFS_STAGE ROOTFS_DIR
+    if [ "$distname" = debian ]; then
+        ROOTFS_STAGE=$(mktemp -d "$(realpath "${TMPDIR:-/tmp}")/k230-debian.XXXXXXXX")
+        ROOTFS_DIR="$ROOTFS_STAGE/$distr_rootfs"
+        cleanup_debian_stage() {
+            local status=$? mounts
+            trap - EXIT
+            if ! mounts=$(findmnt -rn --raw -o TARGET); then
+                print_red "Cannot check mounts; preserving Debian stage: $ROOTFS_STAGE"
+                exit 1
+            fi
+            if printf '%s\n' "$mounts" | awk -v stage="$ROOTFS_STAGE" \
+                '$0 == stage || index($0, stage "/") == 1 { found = 1 } END { exit !found }'; then
+                print_red "Installer mounts survive; preserving Debian stage: $ROOTFS_STAGE"
+                exit 1
+            fi
+            rm -rf -- "$ROOTFS_STAGE"
+            exit "$status"
+        }
+        trap cleanup_debian_stage EXIT
+        tar --same-owner -xf "${distr_rootfs}.tar.gz" -C "$ROOTFS_STAGE"
+    else
+        ROOTFS_DIR="${BINARIES_DIR}/${distr_rootfs}"
+        rm -rf "${distr_rootfs}"
+        tar -xf "${distr_rootfs}.tar.gz"
+    fi
 
     # Copy buildroot artifacts to rootfs
     local target_dir="${BINARIES_DIR}/../target"
-    cp "${target_dir}/lib/modules" "${distr_rootfs}/lib" -r
-    cp "${K230_SDK_ROOT}/buildroot-overlay/package/nonai2d/modprobe.d/nonai2d.conf" "${distr_rootfs}/lib/modprobe.d/" -r
-    cp "${target_dir}/bin/sta.sh" "${distr_rootfs}/bin/"
-    #cp "${target_dir}/bin/reboot_to_upgrade" "${distr_rootfs}/bin/"
-    cp "${target_dir}/bin/k230_iomux.py" "${distr_rootfs}/bin/"
-    cat "${target_dir}/etc/version/release_version" >> "${distr_rootfs}/etc/issue"
+    cp "${target_dir}/lib/modules" "$ROOTFS_DIR/lib" -r
+    cp "${K230_SDK_ROOT}/buildroot-overlay/package/nonai2d/modprobe.d/nonai2d.conf" "$ROOTFS_DIR/lib/modprobe.d/" -r
+    cp "${target_dir}/bin/sta.sh" "$ROOTFS_DIR/bin/"
+    cp "${target_dir}/bin/k230_iomux.py" "$ROOTFS_DIR/bin/"
+    cat "${target_dir}/etc/version/release_version" >> "$ROOTFS_DIR/etc/issue"
 
-    echo '[ -f /etc/fw_env.config ] || echo "${bootddev}   0x1e0000 0x10000" >/etc/fw_env.config' >> ${distr_rootfs}/opt/mount_boot.sh
-    cp "${target_dir}/usr/bin/fw_setenv" "${distr_rootfs}/usr/bin/"
-    cp "${target_dir}/usr/bin/fw_printenv" "${distr_rootfs}/usr/bin/"
-    cp ${target_dir}/usr/lib/libubootenv.so*  "${distr_rootfs}/usr/lib/"
+    echo '[ -f /etc/fw_env.config ] || echo "${bootddev}   0x1e0000 0x10000" >/etc/fw_env.config' >> "$ROOTFS_DIR/opt/mount_boot.sh"
+    cp "${target_dir}/usr/bin/fw_setenv" "$ROOTFS_DIR/usr/bin/"
+    cp "${target_dir}/usr/bin/fw_printenv" "$ROOTFS_DIR/usr/bin/"
+    cp "${target_dir}"/usr/lib/libubootenv.so* "$ROOTFS_DIR/usr/lib/"
 
-
-
-    # Install DEB packages for both debian and ubuntu
-    # For debian: download packages from server first
-    if [ "${distname}" = "debian" ]; then
-        print_blue "Installing DEB packages..."
-        local deb_dir="${BINARIES_DIR}/deb"
-        local opencv_backup="${BINARIES_DIR}/k230-opencv4.deb.bak"
-
-        # Download DEB packages from server
-        mkdir -p "${deb_dir}/remote_deb"
-        wget -c --progress=bar:force -r -np -nc -k -nd -A "*.deb" -P "${deb_dir}/remote_deb" "${DISTR_DOWN_URI}/deb/"
-
-        # Temporarily move opencv package (may have dependency issues)
-        [ -f "${deb_dir}/k230-opencv4.deb" ] && mv "${deb_dir}/k230-opencv4.deb" "${opencv_backup}"
-
-        # Install all DEB packages to rootfs
-        for deb_file in "${deb_dir}"/*.deb   "${deb_dir}"/remote_deb/*.deb; do
-            [ -f "${deb_file}" ] && dpkg -x "${deb_file}" "${distr_rootfs}/"
-        done
-
-        # Restore opencv package
-        [ -f "${opencv_backup}" ] && mv "${opencv_backup}" "${deb_dir}/k230-opencv4.deb"
+    if [ "$distname" = debian ]; then
+        if [ -d "$target_dir/lib/firmware" ]; then
+            mkdir -p "$ROOTFS_DIR/lib/firmware"
+            cp -a "$target_dir/lib/firmware/." "$ROOTFS_DIR/lib/firmware/"
+            if [ -d "$target_dir/lib/firmware/aic8800D80" ]; then
+                mkdir -p "$ROOTFS_DIR/etc/modprobe.d"
+                printf '%s\n' 'options aic8800_bsp aic_fw_path=/lib/firmware/aic8800D80' > "$ROOTFS_DIR/etc/modprobe.d/aic8800.conf"
+            fi
+        fi
     else
-        # For ubuntu: install existing deb packages (if any) from BINARIES_DIR/deb
+        # Preserve upstream Ubuntu extraction and service configuration.
         print_blue "Installing DEB packages..."
         for deb_file in "${BINARIES_DIR}/deb/"*.deb; do
-            [ -f "${deb_file}" ] && dpkg -x "${deb_file}" "${distr_rootfs}/"
+            [ -f "${deb_file}" ] && dpkg -x "${deb_file}" "$ROOTFS_DIR/"
         done
+        mkdir -p "$ROOTFS_DIR/etc/systemd/system/basic.target.wants/"
+        ln -sf /etc/systemd/system/vvcam.service "$ROOTFS_DIR/etc/systemd/system/basic.target.wants/vvcam.service"
     fi
 
-    # Enable vvcam service for both debian and ubuntu
-    mkdir -p "${distr_rootfs}/etc/systemd/system/basic.target.wants/"
-    ln -sf /etc/systemd/system/vvcam.service "${distr_rootfs}/etc/systemd/system/basic.target.wants/vvcam.service"
+    if grep -qx 'BR2_PACKAGE_PYTHON_K230=y' "$BRW_BUILD_DIR/.config"; then
+        # The k230 wheel is ABI-specific: Debian has cp313, Ubuntu has cp312.
+        local dist_packages
+        dist_packages="$(ls -d "$ROOTFS_DIR"/usr/local/lib/python3.*/dist-packages 2>/dev/null | head -1)"
+        if [ -z "$dist_packages" ]; then
+            print_red "Error: no /usr/local/lib/python3.*/dist-packages in $ROOTFS_DIR"
+            exit 1
+        fi
 
-    # Install python wheels into the distribution's dist-packages.
-    #
-    # The k230 wheel is ABI-specific: debian13 ships python3.13 while ubuntu24
-    # ships python3.12, and pybind11 extensions are not compatible across the
-    # two. Buildroot only builds the cp313 wheel; the cp312 one comes from
-    # buildroot-overlay/board/canaan/k230-soc/distribution/cp312-support/build_k230_wheel_py312.sh.
-    # nncaseruntime ships inside the k230 wheel (built from source against the
-    # libnncase staging libs), so no prebuilt nncaseruntime wheel is needed
-    # here anymore.
-    local dist_packages
-    dist_packages="$(ls -d "${distr_rootfs}"/usr/local/lib/python3.*/dist-packages 2>/dev/null | head -1)"
-    if [ -z "${dist_packages}" ]; then
-        print_red "Error: no /usr/local/lib/python3.*/dist-packages in ${distr_rootfs}"
-        exit 1
+        local py_ver py_tag pkg_build_dir k230_wheel
+        py_ver="$(basename "$(dirname "$dist_packages")")"
+        py_tag="cp$(echo "$py_ver" | sed 's/^python//; s/\.//')"
+        pkg_build_dir="${BINARIES_DIR}/../build/python-k230-1.0.0"
+        k230_wheel="${pkg_build_dir}/dist/k230_python-1.0.0-${py_tag}-${py_tag}-linux_riscv64.whl"
+        print_blue "${distname} uses ${py_ver}, installing ${py_tag} wheel"
+
+        if [ ! -f "$k230_wheel" ] && [ "$py_tag" = cp312 ]; then
+            print_blue "cp312 wheel missing, cross-building it..."
+            "${K230_SDK_ROOT}/buildroot-overlay/board/canaan/k230-soc/distribution/cp312-support/build_k230_wheel_py312.sh" "$BRW_BUILD_DIR"
+            chown -R --reference="${pkg_build_dir}/setup.py" \
+                "${pkg_build_dir}/dist" "${pkg_build_dir}/build-py312"
+        fi
+        if [ ! -f "$k230_wheel" ]; then
+            print_red "Error: ${k230_wheel} not found"
+            exit 1
+        fi
+        unzip -o "$k230_wheel" -d "$dist_packages"
     fi
-
-    local py_ver py_tag pkg_build_dir k230_wheel
-    py_ver="$(basename "$(dirname "${dist_packages}")")"            # e.g. python3.12
-    py_tag="cp$(echo "${py_ver}" | sed 's/^python//; s/\.//')"      # e.g. cp312
-    pkg_build_dir="${BINARIES_DIR}/../build/python-k230-1.0.0"
-    k230_wheel="${pkg_build_dir}/dist/k230_python-1.0.0-${py_tag}-${py_tag}-linux_riscv64.whl"
-    print_blue "${distname} uses ${py_ver}, installing ${py_tag} wheel"
-
-    if [ ! -f "${k230_wheel}" ] && [ "${py_tag}" = "cp312" ]; then
-        print_blue "cp312 wheel missing, cross-building it..."
-        "${K230_SDK_ROOT}/buildroot-overlay/board/canaan/k230-soc/distribution/cp312-support/build_k230_wheel_py312.sh" "${BRW_BUILD_DIR}"
-        # We run as root; hand the artifacts back to whoever owns the build tree
-        # so a later non-root `make buildroot` can still write there.
-        chown -R --reference="${pkg_build_dir}/setup.py" \
-            "${pkg_build_dir}/dist" "${pkg_build_dir}/build-py312"
-    fi
-    if [ ! -f "${k230_wheel}" ]; then
-        print_red "Error: ${k230_wheel} not found"
-        exit 1
-    fi
-
-    unzip -o "${k230_wheel}" -d "${dist_packages}"
 
     # Copy additional libraries and binaries
-    cp -fL "${target_dir}/usr/lib/libjpeg.so.9" "${distr_rootfs}/usr/lib/riscv64-linux-gnu/"
-    cp -rfL "${target_dir}/usr/lib/libcrypt.so.2" "${distr_rootfs}/usr/lib/riscv64-linux-gnu/"
+    cp -fL "${target_dir}/usr/lib/libjpeg.so.9" "$ROOTFS_DIR/usr/lib/riscv64-linux-gnu/"
+    cp -rfL "${target_dir}/usr/lib/libcrypt.so.2" "$ROOTFS_DIR/usr/lib/riscv64-linux-gnu/"
 
-    cp -rf "${target_dir}/etc/init.d/S41adb_mtp" "${distr_rootfs}/etc/vvcam/"
-    cp -rf "${target_dir}/etc/umtprd" "${distr_rootfs}/etc/"
-    cp -rf "${target_dir}/usr/sbin/umtprd" "${distr_rootfs}/usr/sbin/"
-    cp -rf "${target_dir}/usr/bin/adbd" "${distr_rootfs}/usr/bin/"
+    mkdir -p "$ROOTFS_DIR/etc/vvcam"
+    cp -rf "${target_dir}/etc/init.d/S41adb_mtp" "$ROOTFS_DIR/etc/vvcam/"
+    cp -rf "${target_dir}/etc/umtprd" "$ROOTFS_DIR/etc/"
+    cp -rf "${target_dir}/usr/sbin/umtprd" "$ROOTFS_DIR/usr/sbin/"
+    cp -rf "${target_dir}/usr/bin/adbd" "$ROOTFS_DIR/usr/bin/"
 
     # Create /app symlink pointing to /root/app
-    cd "${distr_rootfs}"
-    rm -rf app
-    ln -s root/app app
-    cd - >/dev/null
+    rm -rf "$ROOTFS_DIR/app"
+    ln -s root/app "$ROOTFS_DIR/app"
+
+    if [ "$distname" = debian ]; then
+        local kernel_context="$ROOTFS_STAGE/kernel-context.json"
+        if ! python3 "$K230_SDK_ROOT/packaging/debian/scripts/kernel-context.py" \
+            --sdk-root "$K230_SDK_ROOT" --conf "$CONF" > "$kernel_context"; then
+            print_red "Cannot generate kernel context; preserving the previous SD image"
+            exit 1
+        fi
+        "$K230_SDK_ROOT/packaging/debian/scripts/install-rootfs-packages.sh" \
+            "$ROOTFS_DIR" "$kernel_context" \
+            "$K230_SDK_ROOT/packaging/debian/keys/cyberdeck-archive.asc"
+    fi
 
     # Generate ext4 image for rootfs
     print_blue "Generating ext4 image..."
     local rootfs_size
-    rootfs_size=$(( $(sudo du -sm "${distr_rootfs}" | cut -f1) + 300 ))
-    mkfs.ext4 -F -d "${distr_rootfs}" -r 1 -N 0 -m 1 -L "rootfs" "${distr_rootfs}.ext4" "${rootfs_size}m"
+    rootfs_size=$(( $(sudo du -sm "$ROOTFS_DIR" | cut -f1) + 300 ))
+    mkfs.ext4 -F -d "$ROOTFS_DIR" -r 1 -N 0 -m 1 -L "rootfs" "${distr_rootfs}.ext4" "${rootfs_size}m"
+
+    if [ "$distname" = debian ]; then
+        cp sysimage-sdcard.img "$dist_img_name"
+    fi
 
     # Resize the main image and embed the ext4 rootfs
     print_blue "Embedding rootfs into image..."
@@ -319,8 +336,11 @@ distribution_rootfs_replace() {
     chmod a+w "${distr_rootfs}.tar.gz" "${dist_img_name}.gz" "${final_name}"
 
     # Cleanup
-    rm -rf "${distr_rootfs}" "${distr_rootfs}.ext4"
-}
+    if [ "$distname" = ubuntu ]; then
+        rm -rf "${distr_rootfs}"
+    fi
+    rm -f "${distr_rootfs}.ext4"
+)
 # Main execution
 if [ "$(id -u)" -ne 0 ]; then
     print_red "Permission denied: you need root privileges. Example: sudo make debian"
@@ -344,6 +364,10 @@ print_blue "download mirror...DISTR_DOWN_URI=${DISTR_DOWN_URI},BR2_PRIMARY_SITE=
 # Process distribution type
 case "${distribution_type}" in
     debian)
+        if [ "$CONF" != k230_canmv_01studio_defconfig ]; then
+            print_red "Signed Debian assembly supports only k230_canmv_01studio_defconfig"
+            exit 1
+        fi
         distribution_rootfs_replace "debian" "debian13" "${DISTR_DOWN_URI}/debian13.tar.gz" "c958b36f56d5e2a88446b03bb7dc6557"
         ;;
     ubuntu)

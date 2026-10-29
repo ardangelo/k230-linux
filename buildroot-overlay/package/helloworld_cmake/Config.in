@@ -1,4 +1,5 @@
 config BR2_PACKAGE_HELLOWORLD_CMAKE
     bool "helloworld cmake"
+    select BR2_PACKAGE_LIBPNG
     help
       A simple "Hello, World!" program built with CMake.

@@ -9,7 +9,10 @@ add_executable(helloWorld_cmake main.c )
 
 install(TARGETS helloWorld_cmake DESTINATION /root/app/helloworld/)
 
-add_subdirectory(opencv_test)
+option(BUILD_OPENCV_TEST "Build the OpenCV example" ON)
+if(BUILD_OPENCV_TEST)
+    add_subdirectory(opencv_test)
+endif()
 add_subdirectory(lsfile)
 add_subdirectory(rvv)
 add_subdirectory(uart)
