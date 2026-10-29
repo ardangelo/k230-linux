@@ -212,9 +212,11 @@ Missing inputs must be downloadable from their configured upstreams, including
 the retained wireless driver sources and frozen Debian base. Removing AI demos
 does not remove those hardware dependencies. See [Docker build setup](tools/docker/README.md).
 
-The ABI identity includes the whole board defconfig. Removing AI selections
-therefore requires matching Cyberdeck packages from the publisher before Debian
-assembly can install them; do not substitute the previous ABI.
+Buildroot application selections, including AI demos, do not identify the kernel
+ABI. The identity retains kernel source revision/release, generated kernel
+configuration, symbol versions, selected fragments, authored kernel overlay and
+compiler. Migration from the former whole-defconfig hash requires matching
+published Cyberdeck packages once; subsequent application-only changes do not.
 
 Cancellation while compiler output is still progressing can indicate the job
 deadline rather than a package failure. Push workflow changes to start a new

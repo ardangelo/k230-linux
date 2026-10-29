@@ -56,10 +56,12 @@ Retained proprietary wireless sources must still be available, and Debian
 assembly fetches the checksum-checked frozen `debian13.tar.gz` when absent.
 No source or base-archive restore step bypasses those downloads.
 
-The ABI identity hashes the entire selected board defconfig. Even a non-kernel
-package-selection change needs matching publisher packages for the resulting
-identity before Debian assembly. The frozen Debian base and dependency
-selectors remain unchanged; Cyberdeck packages come from live signed APT.
+Buildroot application selections do not identify the kernel ABI. Kernel source
+revision/release, generated kernel configuration, symbol versions, selected
+fragments, authored kernel overlay and compiler remain in the identity.
+Migrating from the former whole-defconfig hash needs matching publisher packages
+once, not for subsequent application-only changes. The frozen Debian base and
+dependency selectors remain unchanged; Cyberdeck packages come from live signed APT.
 
 The workflow also supports manual dispatch. GitHub requires the workflow on
 the default branch for the **Run workflow** button; select `cyberdeck` when

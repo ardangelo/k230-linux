@@ -33,15 +33,20 @@ it does not run the Debian installer or require its context, key or package list
 ## Matching the prepared kernel
 
 Before extraction, `scripts/kernel-context.py` derives the prepared kernel's
-full ABI identity from the selected SDK configuration, kernel inputs, generated
-configuration, symbol versions and compiler. It is an unchanged copy of the
-publisher's independent ABI tool. Successful generation atomically replaces
+full ABI identity from kernel source revision/release, selected kernel fragments
+and authored kernel overlay, generated kernel configuration, symbol versions
+and compiler. It is a verbatim copy of the publisher's independent ABI tool.
+Successful generation atomically replaces
 `output/<CONF>/debian/kernel-context.json`; failure stops assembly instead of
 using an older context.
 
-The identity includes the entire selected board defconfig. Changing non-kernel
-package selections also changes the identity, even if the compiled kernel is
-unchanged. Publish matching packages for that identity before assembling Debian.
+Buildroot application selections in the board defconfig do not identify the
+prepared kernel ABI. The tool still checks that the selected kernel source
+revision and fragment paths agree with the prepared configuration.
+
+Migrating from the former whole-defconfig identity changes the hash once.
+Publish matching Cyberdeck packages for the corrected identity before assembling
+Debian; do not reuse the previous ABI.
 
 For ABI `H`, the installer selects suite `trixie-k230-H` at:
 
