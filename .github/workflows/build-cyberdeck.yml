@@ -33,6 +33,21 @@ jobs:
           submodules: recursive
           persist-credentials: false
 
+      - name: Restore cached SDK inputs
+        run: |
+          cache="$HOME/.cache/k230-linux"
+          for input in \
+            dl/common/kmodel_v2.10.0.tgz \
+            "output/$CONF/images/debian13.tar.gz"
+          do
+            archive="$cache/${input##*/}"
+            if [ -f "$archive" ]; then
+              mkdir -p "$(dirname "$input")"
+              echo "Restoring SDK input: $archive"
+              cp --reflink=auto -- "$archive" "$input"
+            fi
+          done
+
       - name: Build Buildroot image
         run: |
           docker run --rm \
