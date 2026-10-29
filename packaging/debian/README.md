@@ -23,6 +23,9 @@ rootfs uses an owned temporary directory under `TMPDIR` (default `/tmp`); use a
 native POSIX filesystem there, not VMHGFS. Tarballs and ext4/SD image byte streams
 remain in `output/<CONF>/images/`.
 
+The 01studio Buildroot configuration excludes AI demos, NNCase, model downloads
+and OpenCV. Debian's image package transaction does not install those SDK packages.
+
 The output is `output/<CONF>/images/debian.img.gz`, with the uncompressed disk
 retained as `debian.img.bak`. Ubuntu uses its separate baseline assembly path;
 it does not run the Debian installer or require its context, key or package list.
@@ -35,6 +38,10 @@ configuration, symbol versions and compiler. It is an unchanged copy of the
 publisher's independent ABI tool. Successful generation atomically replaces
 `output/<CONF>/debian/kernel-context.json`; failure stops assembly instead of
 using an older context.
+
+The identity includes the entire selected board defconfig. Changing non-kernel
+package selections also changes the identity, even if the compiled kernel is
+unchanged. Publish matching packages for that identity before assembling Debian.
 
 For ABI `H`, the installer selects suite `trixie-k230-H` at:
 

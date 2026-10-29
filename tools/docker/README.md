@@ -20,55 +20,17 @@ docker build -f tools/docker/buildroot/Dockerfile -t k230-buildroot tools/docker
 docker build -f tools/docker/debian/Dockerfile -t k230-debian tools/docker/debian
 ```
 
-## Versioned host-tools SDK image
-
-Cyberdeck CI uses a derived host SDK image in addition to the existing
-`k230-buildroot` and `k230-debian` environments. Build it once on the runner host
-from the SDK checkout, with the Sharp DRM submodule initialized:
-
-```bash
-bash tools/docker/sdk/build.sh \
-    k230-buildroot:2025.02.1-canmv-01studio-hosts-1 \
-    "$HOME/.cache/k230-linux/dl" \
-    "$HOME/.cache/k230-linux/debian13.tar.gz"
-```
-
-The second argument is a complete Buildroot download directory; the third is
-the existing frozen Debian base archive. The helper checks the base checksum,
-creates a disposable build context, and extends `k230-buildroot:latest` without
-rebuilding its toolchain or OS packages. `BASE_IMAGE` can select another existing
-base image. Context creation uses `TMPDIR` (default `/tmp`).
-
-The image build runs the normal source prefetch, derives host packages from
-Buildroot's `show-info` dependency graph, and builds only those host packages.
-It retains their installed tools and completion metadata, but rejects target
-build/install stamps or installed target files. No previous checkout's
-`output/` is imported.
-
-The final image stores its seed outside `/src`. In CI, `k230-sdk-init` copies it
-into a fresh native POSIX workspace at `/src`, preserving the absolute paths
-used by host tools and generated Makefiles. Initialization requires
-`CONF=k230_canmv_01studio_defconfig` and rejects existing `output/` or `dl/`.
-The target build then runs normally; Debian assembly uses `k230-debian` and
-installs Cyberdeck packages from live signed APT.
-
-Build a new SDK revision when the Buildroot version, base toolchain image,
-defconfig, or host package recipes/patches change. Update the version in
-`tools/docker/sdk/Dockerfile`, `build.sh`, and `build-cyberdeck.yml` together.
-Install the new image on the runner before pushing the workflow change.
-Target-only changes still rebuild target outputs in each fresh CI workspace.
-
 ## GitHub Actions (cyberdeck)
 
 `.github/workflows/build-cyberdeck.yml` builds the Buildroot and Debian images on
-pushes to `cyberdeck`. It uses the prebuilt versioned host SDK, `k230-buildroot`,
-and `k230-debian` images on a self-hosted runner; CI does not build or pull them.
+pushes to `cyberdeck`. It uses the existing `k230-buildroot` and `k230-debian`
+images on a self-hosted runner; CI does not build or pull them.
 
 To connect the build host to GitHub:
 
 1. Open the repository's **Settings → Actions → Runners → New self-hosted runner**.
    Select Linux x64 and follow GitHub's download and configuration commands on
-   the host containing all three Docker images.
+   the host containing both Docker images.
 2. Add the custom label `k230`. The workflow requires the labels `self-hosted`,
    `linux`, `x64`, and `k230`.
 3. Ensure the runner account can use Docker without `sudo` and accesses the
@@ -81,6 +43,23 @@ To connect the build host to GitHub:
 Successful builds publish a `cyberdeck-images-<commit SHA>` artifact containing
 `sysimage-sdcard.img.gz` and `debian.img.gz`, retained for seven days. Each run
 uses the runner's Actions checkout, not an existing development checkout.
+
+Each job starts from a clean checkout without restoring previous `output/` or
+`dl/` directories. It runs normal source prefetch (`make CONF="$CONF" dl`),
+then the full Buildroot build in `k230-buildroot`, followed by privileged Debian
+assembly in `k230-debian`. No prebuilt Buildroot host tools or completion stamps
+are seeded.
+
+The 01studio configuration excludes AI demos, NNCase, model downloads and
+OpenCV, while retaining its other selected hardware and media packages.
+Retained proprietary wireless sources must still be available, and Debian
+assembly fetches the checksum-checked frozen `debian13.tar.gz` when absent.
+No source or base-archive restore step bypasses those downloads.
+
+The ABI identity hashes the entire selected board defconfig. Even a non-kernel
+package-selection change needs matching publisher packages for the resulting
+identity before Debian assembly. The frozen Debian base and dependency
+selectors remain unchanged; Cyberdeck packages come from live signed APT.
 
 The workflow also supports manual dispatch. GitHub requires the workflow on
 the default branch for the **Run workflow** button; select `cyberdeck` when
@@ -230,82 +209,30 @@ sudo reboot
 This package updates Linux boot files and `/lib/modules`; it does not update
 raw U-Boot partitions.
 
-### 6. First-class Debian Packages
+### 6. Debian image packages
 
-The Debian package path independently recompiles Sharp DRM from
-`buildroot-overlay/package/sharp-drm/module/`; it never copies the Buildroot
-module into a `.deb`. A prepared matching kernel tree is required.
+The Debian image installs `cyberdeck-service`, `k230-status-ready`,
+`k230-sharp-drm` and `k230-kernel-abi` through the signed Cyberdeck APT archive
+for its locally computed kernel ABI. The [Debian package guide](../../packaging/debian/README.md)
+describes the trust configuration, frozen Debian dependencies and transaction
+failure boundaries.
+
+Package builds and archive signing belong to the separate
+[cyberdeck-packages publisher](https://github.com/ardangelo/cyberdeck-packages).
+There is no local unsigned repository or separate package/repository make
+target for Debian assembly. Buildroot SDK `.deb` hook outputs are not image
+APT inputs.
+
+Run the ordinary image command after building Buildroot:
 
 ```bash
 CONF=k230_canmv_01studio_defconfig
-
-# Build or reuse the ABI-specific local packages.
-docker run --rm -v $(pwd):/src k230-debian \
-    make CONF=$CONF debian-packages
-
-# Recreate the checksum-verified local APT repository.
-docker run --rm -v $(pwd):/src k230-debian \
-    make CONF=$CONF debian-repository
-
-# Assemble the image and install packages through apt/dpkg in the RISC-V chroot.
-docker run --rm --privileged -v $(pwd):/src k230-debian \
-    make CONF=$CONF debian
+docker run --rm --privileged -v "$PWD:/src" k230-debian make CONF="$CONF" debian
 ```
 
-The package and repository targets do not need `--privileged`; image assembly
-does. The installer mounts `binfmt_misc`, enables the packaged `qemu-riscv64`
-handler, and verifies a RISC-V command before touching the staged rootfs. It
-fails without the required container privilege and never falls back to payload
-extraction. Rebuild the Debian container after changing its Dockerfile.
-
-Sharp DRM-only iteration requires no Linux clean or rebuild while the kernel ABI
-is unchanged:
-
-```bash
-# Edit buildroot-overlay/package/sharp-drm/module/, then:
-docker run --rm --privileged -v $(pwd):/src k230-debian \
-    make CONF=k230_canmv_01studio_defconfig debian
-```
-
-The content-derived build key includes module source and metadata, kernel
-release/configuration and `Module.symvers`, and toolchain identity. Kernel ABI
-changes therefore invalidate the module package. `sharp-drm-rebuild` remains
-the separate Buildroot-image package path.
-
-Generated files are under `output/$CONF/debian/`:
-
-- packages: `packages/*.deb`;
-- build provenance: `build-manifest.json`;
-- repository and package provenance: `repository/`;
-- logs: `logs/`;
-- verified vendor cache: `output/$CONF/vendor-debs/`.
-
-Inspect the repository and package:
-
-```bash
-dpkg-deb --info output/$CONF/debian/packages/k230-sharp-drm_*.deb
-dpkg-deb --contents output/$CONF/debian/packages/k230-sharp-drm_*.deb
-cat output/$CONF/debian/repository/repository-manifest.json
-```
-
-To update a running target, copy both matching local packages and install them
-together so the exact ABI dependency remains satisfied:
-
-```bash
-sudo apt install ./k230-kernel-abi_*_riscv64.deb ./k230-sharp-drm_*_riscv64.deb
-sudo depmod -a
-```
-
-Failures are intentional and actionable:
-
-- missing generated kernel headers or `Module.symvers`: run `linux-rebuild`;
-- kernel release/config hash mismatch: rebuild the Debian packages;
-- RISC-V execution failure: register binfmt and rerun the image with
-  `--privileged`;
-- dependency failure: inspect `repository-manifest.json`; network APT sources
-  are disabled for the local transaction;
-- quarantined vendor package: fix its metadata/scripts and update the reviewed
-  checksum instead of extracting its payload.
+A later build of the same commit may install newer matching-ABI Cyberdeck
+packages. It does not automatically advance the frozen Debian base or
+dependency snapshot.
 
 ---
 

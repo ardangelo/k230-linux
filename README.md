@@ -99,6 +99,10 @@ ABI/trust policy and transaction failure boundaries.
 
 ## ai_demo
 
+The Cyberdeck `k230_canmv_01studio_defconfig` does not select AI demos, NNCase,
+model downloads, or OpenCV. Debian assembly does not install those SDK packages.
+Their source and recipes remain available for other board configurations.
+
 The AI-related demos currently integrated are as follows:
 
 | name                 | 说明                              |
@@ -195,30 +199,27 @@ The AI-related demos currently integrated are as follows:
 >
 ## FQA
 
-### Cyberdeck GitHub Actions build deadline
+### Cyberdeck GitHub Actions builds
 
-`.github/workflows/build-cyberdeck.yml` allows 360 minutes for the entire job,
-including checkout, the Buildroot build, Debian assembly, and artifact upload.
-Checkout cleans the ignored `dl/` and `output/` directories. A versioned SDK image
-then seeds prebuilt host tools; every run compiles fresh target packages and images.
+`.github/workflows/build-cyberdeck.yml` allows 360 minutes for checkout, source
+download, the full Buildroot build, Debian assembly, and artifact upload.
+Each run uses a fresh checkout with no previous `dl/` or `output/` restored.
+The existing `k230-buildroot` container prefetches sources with
+`make CONF=k230_canmv_01studio_defconfig dl` and builds normally;
+`k230-debian` assembles Debian separately.
+
+Missing inputs must be downloadable from their configured upstreams, including
+the retained wireless driver sources and frozen Debian base. Removing AI demos
+does not remove those hardware dependencies. See [Docker build setup](tools/docker/README.md).
+
+The ABI identity includes the whole board defconfig. Removing AI selections
+therefore requires matching Cyberdeck packages from the publisher before Debian
+assembly can install them; do not substitute the previous ABI.
 
 Cancellation while compiler output is still progressing can indicate the job
 deadline rather than a package failure. Push workflow changes to start a new
 run; rerunning an old job uses its original workflow and timeout.
 
-### Versioned host SDK for Cyberdeck builds
-
-The workflow uses `k230-buildroot:2025.02.1-canmv-01studio-hosts-1`, built with
-`tools/docker/sdk/build.sh`. It extends the existing toolchain image with the
-configured Buildroot source, selected host tools and their completion stamps,
-source downloads, and the frozen Debian base. It contains no compiled target
-packages or target disk images.
-
-CI initializes a fresh `/src` workspace from that image, prefetches the configured
-sources, builds the K230 target outputs, then assembles Debian separately.
-There is no persistent compiled-output cache. Cyberdeck packages still come from
-live signed APT. See [Docker SDK setup](tools/docker/README.md#versioned-host-tools-sdk-image)
-for the build command and version-update requirements.
 
 ### Debian package output directory on clean builds
 

@@ -24,7 +24,6 @@ jobs:
 
     env:
       CONF: k230_canmv_01studio_defconfig
-      SDK_IMAGE: k230-buildroot:2025.02.1-canmv-01studio-hosts-1
 
     steps:
       - name: Checkout source
@@ -34,26 +33,18 @@ jobs:
           submodules: recursive
           persist-credentials: false
 
-      - name: Initialize host SDK
-        run: |
-          docker run --rm \
-            --env CONF="$CONF" \
-            -v "$GITHUB_WORKSPACE:/src" \
-            "$SDK_IMAGE" \
-            /usr/local/bin/k230-sdk-init
-
       - name: Download Buildroot sources
         run: |
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/src" \
-            "$SDK_IMAGE" \
+            k230-buildroot \
             make CONF="$CONF" dl
 
       - name: Build Buildroot image
         run: |
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/src" \
-            "$SDK_IMAGE" \
+            k230-buildroot \
             make CONF="$CONF"
 
       - name: Build Debian image
