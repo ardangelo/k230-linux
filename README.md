@@ -199,24 +199,26 @@ The AI-related demos currently integrated are as follows:
 
 `.github/workflows/build-cyberdeck.yml` allows 360 minutes for the entire job,
 including checkout, the Buildroot build, Debian assembly, and artifact upload.
-Checkout cleans the ignored `dl/` and `output/` directories, so each run recompiles
-instead of resuming the previous run's compiled output.
+Checkout cleans the ignored `dl/` and `output/` directories. A versioned SDK image
+then seeds prebuilt host tools; every run compiles fresh target packages and images.
 
 Cancellation while compiler output is still progressing can indicate the job
 deadline rather than a package failure. Push workflow changes to start a new
 run; rerunning an old job uses its original workflow and timeout.
 
-### Cached SDK inputs for Cyberdeck builds
+### Versioned host SDK for Cyberdeck builds
 
-After checkout, the workflow optionally restores `kmodel_v2.10.0.tgz` and
-`debian13.tar.gz` from `$HOME/.cache/k230-linux/` in the runner account. Place
-existing copies of those archives there to build when the SDK download hosts
-are unavailable. Missing cache entries use the normal download path.
+The workflow uses `k230-buildroot:2025.02.1-canmv-01studio-hosts-1`, built with
+`tools/docker/sdk/build.sh`. It extends the existing toolchain image with the
+configured Buildroot source, selected host tools and their completion stamps,
+source downloads, and the frozen Debian base. It contains no compiled target
+packages or target disk images.
 
-The model archive is restored to `dl/common/` and checked against
-`buildroot-overlay/package/ai_demo/common/common.hash`. The Debian base is restored
-to `output/<CONF>/images/` and checked against the checksum in `distribution.sh`.
-This caches SDK inputs only; Cyberdeck packages still come from live signed APT.
+CI initializes a fresh `/src` workspace from that image, prefetches the configured
+sources, builds the K230 target outputs, then assembles Debian separately.
+There is no persistent compiled-output cache. Cyberdeck packages still come from
+live signed APT. See [Docker SDK setup](tools/docker/README.md#versioned-host-tools-sdk-image)
+for the build command and version-update requirements.
 
 ### Debian package output directory on clean builds
 

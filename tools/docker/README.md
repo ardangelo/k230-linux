@@ -20,6 +20,75 @@ docker build -f tools/docker/buildroot/Dockerfile -t k230-buildroot tools/docker
 docker build -f tools/docker/debian/Dockerfile -t k230-debian tools/docker/debian
 ```
 
+## Versioned host-tools SDK image
+
+Cyberdeck CI uses a derived host SDK image in addition to the existing
+`k230-buildroot` and `k230-debian` environments. Build it once on the runner host
+from the SDK checkout, with the Sharp DRM submodule initialized:
+
+```bash
+bash tools/docker/sdk/build.sh \
+    k230-buildroot:2025.02.1-canmv-01studio-hosts-1 \
+    "$HOME/.cache/k230-linux/dl" \
+    "$HOME/.cache/k230-linux/debian13.tar.gz"
+```
+
+The second argument is a complete Buildroot download directory; the third is
+the existing frozen Debian base archive. The helper checks the base checksum,
+creates a disposable build context, and extends `k230-buildroot:latest` without
+rebuilding its toolchain or OS packages. `BASE_IMAGE` can select another existing
+base image. Context creation uses `TMPDIR` (default `/tmp`).
+
+The image build runs the normal source prefetch, derives host packages from
+Buildroot's `show-info` dependency graph, and builds only those host packages.
+It retains their installed tools and completion metadata, but rejects target
+build/install stamps or installed target files. No previous checkout's
+`output/` is imported.
+
+The final image stores its seed outside `/src`. In CI, `k230-sdk-init` copies it
+into a fresh native POSIX workspace at `/src`, preserving the absolute paths
+used by host tools and generated Makefiles. Initialization requires
+`CONF=k230_canmv_01studio_defconfig` and rejects existing `output/` or `dl/`.
+The target build then runs normally; Debian assembly uses `k230-debian` and
+installs Cyberdeck packages from live signed APT.
+
+Build a new SDK revision when the Buildroot version, base toolchain image,
+defconfig, or host package recipes/patches change. Update the version in
+`tools/docker/sdk/Dockerfile`, `build.sh`, and `build-cyberdeck.yml` together.
+Install the new image on the runner before pushing the workflow change.
+Target-only changes still rebuild target outputs in each fresh CI workspace.
+
+## GitHub Actions (cyberdeck)
+
+`.github/workflows/build-cyberdeck.yml` builds the Buildroot and Debian images on
+pushes to `cyberdeck`. It uses the prebuilt versioned host SDK, `k230-buildroot`,
+and `k230-debian` images on a self-hosted runner; CI does not build or pull them.
+
+To connect the build host to GitHub:
+
+1. Open the repository's **Settings → Actions → Runners → New self-hosted runner**.
+   Select Linux x64 and follow GitHub's download and configuration commands on
+   the host containing all three Docker images.
+2. Add the custom label `k230`. The workflow requires the labels `self-hosted`,
+   `linux`, `x64`, and `k230`.
+3. Ensure the runner account can use Docker without `sudo` and accesses the
+   Docker daemon containing those images. The Debian container runs with
+   `--privileged` for mounts and RISC-V binfmt/QEMU.
+4. Keep the runner online, preferably as a service using the runner's `svc.sh`.
+5. Commit and push the workflow to `cyberdeck`, then open the repository's
+   **Actions → Build Cyberdeck** page.
+
+Successful builds publish a `cyberdeck-images-<commit SHA>` artifact containing
+`sysimage-sdcard.img.gz` and `debian.img.gz`, retained for seven days. Each run
+uses the runner's Actions checkout, not an existing development checkout.
+
+The workflow also supports manual dispatch. GitHub requires the workflow on
+the default branch for the **Run workflow** button; select `cyberdeck` when
+dispatching.
+
+Only run trusted code on this host. Docker access and privileged containers
+expose the runner host; the workflow deliberately has no pull-request trigger.
+
 ## Shell Aliases (Optional)
 
 Add to your shell profile to simplify commands below:
