@@ -177,6 +177,13 @@ chroot "$ROOTFS" systemctl disable \
     wpa_supplicant.service
 chroot "$ROOTFS" systemctl enable \
     NetworkManager.service cyberdeck-service.service k230-status-ready.service
+# Factory self-test: runs only on a card holding /etc/cyberdeck/factory-selftest, and there
+# holds k230-status-ready back until it passes; elsewhere it is skipped at boot
+SELFTEST=$(realpath "$(dirname "$0")/../factory-selftest")
+(cd "$SELFTEST" && find . -type f) | while read -r f; do
+    install -D -o root -g root -m "$(stat -c %a "$SELFTEST/$f")" "$SELFTEST/$f" "$ROOTFS/${f#./}"
+done
+chroot "$ROOTFS" systemctl enable cyberdeck-selftest.service
 chroot "$ROOTFS" dpkg-query -W -f='${Package} ${Version} ${Architecture}\n' \
     cyberdeck-service k230-status-ready k230-sharp-drm k230-kernel-abi \
     network-manager kbd default-jre-headless

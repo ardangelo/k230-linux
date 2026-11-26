@@ -1,0 +1,221 @@
+#!/usr/bin/env python3
+"""Cyberdeck K230 factory self-test.
+
+Runs at boot on a factory test card (see cyberdeck-selftest.service). Checks the K230's boot,
+memory, storage and peripherals, shows the result on the display (tty1) and in
+/run/cyberdeck-selftest.txt, and exits 0 only if everything passed. k230-status-ready, which
+raises the K230 status line the nRF factory test waits for, runs only after a pass.
+"""
+
+import fcntl
+import hashlib
+import os
+import socket
+import struct
+import subprocess
+import sys
+import termios
+import time
+
+RESULT_FILE = "/run/cyberdeck-selftest.txt"
+TTY = "/dev/tty1"
+BT_TTY = "/dev/ttyS1"
+BT_BAUD = 1500000
+MIN_RAM_MB = 900
+RAM_TEST_MB = 64
+STORAGE_TEST_MB = 16
+MIN_WIFI_NETWORKS = 1
+MIN_BLE_DEVICES = 1
+BLE_SCAN_S = 8
+
+
+def run(cmd, timeout=30):
+    return subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=timeout)
+
+
+def check_boot():
+    log = run("dmesg").stdout
+    bad = [w for w in ("Oops", "BUG:", "Kernel panic", "Call Trace") if w in log]
+    failed = run("systemctl --failed --no-legend --plain").stdout.split()
+    if bad:
+        return False, "kernel: " + ", ".join(bad)
+    if failed:
+        return False, "failed: " + " ".join(failed[:2])
+    return True, "clean"
+
+
+def check_ram():
+    total = int(open("/proc/meminfo").read().split()[1]) // 1024
+    if total < MIN_RAM_MB:
+        return False, f"{total} MB < {MIN_RAM_MB}"
+    size = RAM_TEST_MB * 1024 * 1024
+    buf = bytearray(size)
+    for pattern in (b"\x55", b"\xaa", b"\x00", b"\xff"):
+        buf[:] = pattern * size
+        if buf.count(pattern) != size:
+            return False, f"pattern {pattern.hex()} mismatch"
+    return True, f"{total} MB, {RAM_TEST_MB} MB tested"
+
+
+def check_storage():
+    path = "/var/tmp/selftest.bin"
+    data = os.urandom(STORAGE_TEST_MB * 1024 * 1024)
+    with open(path, "wb") as f:
+        f.write(data)
+        f.flush()
+        os.fsync(f.fileno())
+    with open("/proc/sys/vm/drop_caches", "w") as f:
+        f.write("3")
+    with open(path, "rb") as f:
+        ok = hashlib.sha256(f.read()).digest() == hashlib.sha256(data).digest()
+    os.remove(path)
+    return ok, f"{STORAGE_TEST_MB} MB written and read" if ok else "read back differs"
+
+
+def check_display():
+    mods = open("/proc/modules").read()
+    ok = os.path.exists("/dev/dri/card0") and "sharp_drm" in mods
+    return ok, "sharp-drm" if ok else "no sharp-drm"
+
+
+def check_audio():
+    cards = open("/proc/asound/cards").read() if os.path.exists("/proc/asound/cards") else ""
+    ok = "K230" in cards
+    return ok, "K230 codec" if ok else "no sound card"
+
+
+def check_usb():
+    hubs = [d for d in os.listdir("/sys/bus/usb/devices") if d.startswith("usb")]
+    return len(hubs) >= 2, f"{len(hubs)} controllers"
+
+
+def check_wifi():
+    run("nmcli radio wifi on")
+    out = run("nmcli -t -f SSID dev wifi list --rescan yes", timeout=40).stdout
+    ssids = {s for s in out.splitlines() if s}
+    return len(ssids) >= MIN_WIFI_NETWORKS, f"{len(ssids)} networks"
+
+
+def _bt_attach():
+    for mod in ("bluetooth", "hci_uart", "aic8800_btlpm"):
+        run(f"modprobe {mod}")
+    fd = os.open(BT_TTY, os.O_RDWR | os.O_NOCTTY)
+    attrs = termios.tcgetattr(fd)
+    attrs[0] = attrs[1] = attrs[3] = 0
+    attrs[2] = termios.CS8 | termios.CLOCAL | termios.CREAD | termios.CRTSCTS
+    attrs[4] = attrs[5] = getattr(termios, f"B{BT_BAUD}")
+    termios.tcsetattr(fd, termios.TCSANOW, attrs)
+    fcntl.ioctl(fd, 0x5423, struct.pack("i", 15))  # TIOCSETD N_HCI
+    fcntl.ioctl(fd, 0x400455C8, 0)  # HCIUARTSETPROTO H4
+    for _ in range(50):
+        if os.path.exists("/sys/class/bluetooth/hci0"):
+            break
+        time.sleep(0.1)
+    # Bring hci0 up, which resets and sets up the controller, and wait for it
+    s = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_RAW, socket.BTPROTO_HCI)
+    info = bytearray(struct.pack("H", 0) + bytes(90))
+    for _ in range(50):
+        try:
+            fcntl.ioctl(s.fileno(), 0x400448C9, 0)  # HCIDEVUP
+        except OSError:
+            pass  # already up, or still coming up
+        fcntl.ioctl(s.fileno(), 0x800448D3, info)  # HCIGETDEVINFO
+        if struct.unpack_from("I", info, 16)[0] & 1:  # HCI_UP
+            break
+        time.sleep(0.2)
+    s.close()
+    return fd
+
+
+def check_bluetooth():
+    fd = _bt_attach()
+    try:
+        s = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_RAW, socket.BTPROTO_HCI)
+        s.bind((0,))
+        s.setsockopt(socket.SOL_HCI, socket.HCI_FILTER,
+                     struct.pack("<IQH", 1 << 4, (1 << 64) - 1, 0))
+
+        def cmd(ocf, params):
+            s.send(struct.pack("<BHB", 1, (0x08 << 10) | ocf, len(params)) + params)
+            time.sleep(0.1)
+
+        cmd(0x000C, b"\x00\x00")
+        cmd(0x000B, struct.pack("<BHHBB", 1, 0x0030, 0x0030, 0, 0))
+        cmd(0x000C, b"\x01\x00")
+        seen = set()
+        s.settimeout(0.5)
+        end = time.time() + BLE_SCAN_S
+        while time.time() < end:
+            try:
+                pkt = s.recv(300)
+            except socket.timeout:
+                continue
+            if len(pkt) > 4 and pkt[0] == 4 and pkt[1] == 0x3E and pkt[3] == 0x02:
+                off = 5
+                for _ in range(pkt[4]):
+                    seen.add(pkt[off + 2:off + 8])
+                    off += 10 + pkt[off + 8]
+        cmd(0x000C, b"\x00\x00")
+        return len(seen) >= MIN_BLE_DEVICES, f"{len(seen)} devices"
+    finally:
+        os.close(fd)
+
+
+def check_link():
+    ok = run("systemctl is-active cyberdeck-service").stdout.strip() == "active"
+    return ok, "cyberdeck-service" if ok else "service down"
+
+
+def check_thermal():
+    for zone in os.listdir("/sys/class/thermal"):
+        path = f"/sys/class/thermal/{zone}/temp"
+        if os.path.exists(path) and open(path).read().strip():
+            return True, "sensor reads"
+    return False, "no sensor"
+
+
+CHECKS = [
+    ("Boot", check_boot),
+    ("RAM", check_ram),
+    ("Storage", check_storage),
+    ("Display", check_display),
+    ("Audio", check_audio),
+    ("USB", check_usb),
+    ("WiFi", check_wifi),
+    ("Bluetooth", check_bluetooth),
+    ("nRF link", check_link),
+    ("Thermal", check_thermal),
+]
+
+
+def show(lines):
+    text = "\n".join(lines)
+    with open(RESULT_FILE, "w") as f:
+        f.write(text + "\n")
+    print(text, flush=True)
+    try:
+        with open(TTY, "w") as tty:
+            tty.write("\033[2J\033[H" + text + "\n")
+    except OSError:
+        pass
+
+
+def main():
+    lines = ["K230 SELF-TEST", ""]
+    show(lines + ["Running..."])
+    passed = True
+    for name, check in CHECKS:
+        try:
+            ok, detail = check()
+        except Exception as e:  # a check that cannot run fails
+            ok, detail = False, str(e)[:30]
+        passed &= ok
+        lines.append(f"{'PASS' if ok else 'FAIL'}  {name:<10} {detail}")
+        show(lines)
+    lines += ["", "ALL PASSED" if passed else "FAILED: see above"]
+    show(lines)
+    return 0 if passed else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

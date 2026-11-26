@@ -53,6 +53,16 @@ Privileged assembly is required for the real RISC-V chroot and its temporary
 mounts. `Build Cyberdeck` runs the same source fetch, Buildroot and Debian
 commands and uploads `sysimage-sdcard.img.gz` and `debian.img.gz`.
 
+The Debian image carries a factory self-test (`packaging/debian/factory-selftest/`)
+that runs only on a card holding `/etc/cyberdeck/factory-selftest`. At boot it
+checks RAM, storage, display, audio, USB, a WiFi scan, a BLE scan, the nRF link
+and the thermal sensor, shows a checklist on the display and in
+`/run/cyberdeck-selftest.txt`, and holds `k230-status-ready` back until every
+check passes, so the nRF factory test passes on the status line alone. Create
+the marker on a written card (as root, on its root partition) to make it a
+factory card. Kernel messages go to the console at error level only
+(`10-console-quiet.conf`), on every card.
+
 To run those commands on a rented machine instead, `tools/hetzner-build.sh`
 creates a Hetzner Cloud server, builds both images there, copies them back and
 always deletes the server, also on failure. A 48-core `ccx63` takes about 2 h

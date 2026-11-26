@@ -1,0 +1,15 @@
+[Unit]
+Description=Cyberdeck K230 factory self-test
+# Only on a factory test card
+ConditionPathExists=/etc/cyberdeck/factory-selftest
+After=cyberdeck-service.service NetworkManager.service systemd-sysctl.service
+Wants=NetworkManager.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/cyberdeck-selftest
+TimeoutStartSec=180
+
+[Install]
+WantedBy=multi-user.target
