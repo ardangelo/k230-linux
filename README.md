@@ -53,6 +53,15 @@ Privileged assembly is required for the real RISC-V chroot and its temporary
 mounts. `Build Cyberdeck` runs the same source fetch, Buildroot and Debian
 commands and uploads `sysimage-sdcard.img.gz` and `debian.img.gz`.
 
+To run those commands on a rented machine instead, `tools/hetzner-build.sh`
+creates a Hetzner Cloud server, builds both images there, copies them back and
+always deletes the server, also on failure. A 48-core `ccx63` takes about 2 h
+and EUR 3. It needs the `hcloud` CLI and an SSH key in the Hetzner project:
+
+```bash
+HCLOUD_SSH_KEY=my-key SSH_IDENTITY=~/.ssh/id_ed25519 tools/hetzner-build.sh ccx63 hel1
+```
+
 ## Install Toolchain and Dependencies
 
 ```bash
