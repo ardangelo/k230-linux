@@ -1,0 +1,164 @@
+#!/usr/bin/env python3
+"""Fetch one bounded HTTPS reply over Wi-Fi and deliver it to PebbleOS."""
+import argparse
+import fcntl
+import hashlib
+import http.client
+import json
+import math
+import os
+import secrets
+import signal
+import socket
+import ssl
+import struct
+import subprocess
+import time
+from urllib.parse import urlsplit
+
+MAX_BODY = 192
+RESULT_SOCKET = "/run/cyberdeck-service/net-result.sock"
+
+
+def report(event, **values):
+    print(json.dumps({"event": event, "uptime": round(time.clock_gettime(time.CLOCK_BOOTTIME), 3),
+                      **values}), flush=True)
+
+
+def wifi_address(interface):
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+        request = struct.pack("256s", interface.encode("ascii"))
+        # SIOCGIFADDR on Linux
+        address = fcntl.ioctl(probe, 0x8915, request)
+        return socket.inet_ntoa(address[20:24])
+
+
+def fetch(url, interface, timeout):
+    host = url.hostname
+    port = url.port or 443
+    path = url.path or "/"
+    if url.query:
+        path += "?" + url.query
+    context = ssl.create_default_context()
+    addresses = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
+    last_error = None
+    for _, socktype, proto, _, address in addresses:
+        with socket.socket(socket.AF_INET, socktype, proto) as tcp:
+            tcp.settimeout(timeout)
+            tcp.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, interface.encode() + b"\0")
+            try:
+                tcp.connect(address)
+            except OSError as exc:
+                last_error = exc
+                continue
+            report("tcp", remote=address[0], local=tcp.getsockname()[0])
+            with context.wrap_socket(tcp, server_hostname=host) as tls:
+                report("tls", version=tls.version())
+                conn = http.client.HTTPSConnection(host, port, timeout=timeout, context=context)
+                conn.sock = tls
+                try:
+                    conn.request("GET", path, headers={"User-Agent": "Cyberdeck/1",
+                                                       "Cache-Control": "no-cache",
+                                                       "Accept-Encoding": "identity"})
+                    res = conn.getresponse()
+                    body = res.read(MAX_BODY + 1)
+                    if len(body) > MAX_BODY:
+                        raise ValueError(f"response exceeds {MAX_BODY} bytes")
+                    if res.length:
+                        raise http.client.IncompleteRead(body, res.length)
+                    if not 100 <= res.status <= 599:
+                        raise ValueError(f"invalid HTTP status {res.status}")
+                    return res.status, body
+                finally:
+                    conn.close()
+    raise last_error or OSError("no Wi-Fi route to server")
+
+
+def deliver(request_id, status, body, deadline):
+    packet = struct.pack("!IH", request_id, status) + body
+    with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as sock:
+        sock.bind(f"\0cyberdeck-fetch-{os.getpid()}-{request_id}")
+        while time.monotonic() < deadline:
+            try:
+                sock.settimeout(min(0.5, max(0.01, deadline - time.monotonic())))
+                sock.connect(RESULT_SOCKET)
+                sock.send(packet)
+                reply = sock.recv(160).decode("ascii")
+            except (FileNotFoundError, ConnectionRefusedError, socket.timeout):
+                time.sleep(0.05)
+                continue
+            if reply == f"DELIVERED {request_id}":
+                return
+            if reply in (f"ERROR {request_id} busy", f"ERROR {request_id} radio-timeout"):
+                time.sleep(0.1)
+                continue
+            if reply.startswith(f"ERROR {request_id} "):
+                raise RuntimeError(reply)
+        raise TimeoutError("PebbleOS transport acknowledgement timed out")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("url")
+    parser.add_argument("--interface", default="wlan0")
+    parser.add_argument("--timeout", type=float, default=60)
+    args = parser.parse_args()
+    url = urlsplit(args.url)
+    if (url.scheme != "https" or not url.hostname or url.username is not None
+            or url.password is not None or url.fragment):
+        parser.error("an HTTPS endpoint without credentials or a fragment is required")
+    if (not args.interface.isascii() or len(args.interface) not in range(1, 16)
+            or "\0" in args.interface or not math.isfinite(args.timeout) or args.timeout <= 0):
+        parser.error("invalid interface name or timeout")
+    try:
+        url.port
+    except ValueError as exc:
+        parser.error(str(exc))
+    # Socket timeouts apply to individual operations. Bound DNS, slow bodies and delivery too.
+    def expire(signum, frame):
+        raise TimeoutError("network result deadline expired")
+    signal.signal(signal.SIGALRM, expire)
+    signal.setitimer(signal.ITIMER_REAL, args.timeout)
+    deadline = time.monotonic() + args.timeout
+    request_id = secrets.randbelow(2**32 - 1) + 1
+    report("start", request_id=request_id, host=url.hostname)
+    while True:
+        try:
+            address = wifi_address(args.interface)
+            break
+        except OSError:
+            if time.monotonic() >= deadline:
+                raise TimeoutError("Wi-Fi IPv4 address unavailable")
+            time.sleep(0.05)
+    report("wifi_ipv4", address=address)
+    ping = subprocess.Popen(["ping", "-4", "-n", "-I", args.interface, "-c", "1", "-W", "2",
+                             url.hostname], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    try:
+        while time.monotonic() < deadline:
+            try:
+                status, body = fetch(url, args.interface, min(5, deadline - time.monotonic()))
+                break
+            except ssl.SSLCertVerificationError:
+                raise
+            except (OSError, http.client.HTTPException) as exc:
+                report("retry", error=type(exc).__name__)
+                time.sleep(0.2)
+        else:
+            raise TimeoutError("HTTPS fetch timed out")
+        report("https_reply", request_id=request_id, status=status, length=len(body),
+               sha256=hashlib.sha256(body).hexdigest())
+        deliver(request_id, status, body, deadline)
+        report("transport_ack", request_id=request_id)
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        try:
+            output, _ = ping.communicate(timeout=2.5)
+        except subprocess.TimeoutExpired:
+            ping.kill()
+            output, _ = ping.communicate()
+        report("icmp", success=ping.returncode == 0,
+               summary=output.decode(errors="replace").strip().splitlines()[-1:])
+
+
+if __name__ == "__main__":
+    main()

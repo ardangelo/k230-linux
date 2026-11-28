@@ -177,6 +177,11 @@ chroot "$ROOTFS" systemctl disable \
     wpa_supplicant.service
 chroot "$ROOTFS" systemctl enable \
     NetworkManager.service cyberdeck-service.service k230-status-ready.service
+install -D -m 0755 "$(dirname "$0")/../system-generators/cyberdeck-early-console" \
+    "$ROOTFS/usr/lib/systemd/system-generators/cyberdeck-early-console"
+for unit in cyberdeck-console.target cyberdeck-continue-boot.service; do
+    install -D -m 0644 "$(dirname "$0")/../console/$unit" "$ROOTFS/usr/lib/systemd/system/$unit"
+done
 chroot "$ROOTFS" dpkg-query -W -f='${Package} ${Version} ${Architecture}\n' \
     cyberdeck-service k230-status-ready k230-sharp-drm k230-kernel-abi \
     network-manager kbd default-jre-headless

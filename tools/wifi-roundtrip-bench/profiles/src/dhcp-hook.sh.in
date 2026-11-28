@@ -1,0 +1,41 @@
+#!/bin/sh
+# dhcpcd already assigns the leased address and routes. Publish just its validated DNS data.
+set -eu
+[ "${interface:-}" = wlan0 ] || exit 0
+case "${reason:-}" in BOUND|RENEW|REBIND|REBOOT) ;; *) exit 0;; esac
+run=/run/@PREFIX@
+umask 077
+tmp=$(mktemp "$run/.dns.XXXXXX")
+trap 'rm -f "$tmp"' EXIT
+printf '%s\n' "${new_domain_name_servers:-}" | awk '
+  { for (i=1; i<=NF; i++) {
+      n=split($i,a,"."); valid=(n==4)
+      for(j=1;j<=n;j++) if(a[j]!~/^[0-9]+$/ || length(a[j])>3 || a[j]+0>255) valid=0
+      if(valid && $i!="0.0.0.0" && !seen[$i]++) print "nameserver " $i
+    }
+  }' > "$tmp"
+[ -s "$tmp" ] || exit 0
+# The address must come from this DHCP event, never an old configured address.
+ip=${new_ip_address:-}
+printf '%s\n' "$ip" | awk -F. 'NF != 4 {exit 1}
+ {for(i=1;i<=4;i++) if($i !~ /^[0-9]+$/ || length($i)>3 || $i+0>255) exit 1;
+  if($0=="0.0.0.0") exit 1}' || exit 1
+record=$(mktemp "$run/.lease.XXXXXX")
+{ printf '# lease_ipv4=%s\n' "$ip"; cat "$tmp"; } > "$record"
+mv "$record" "$run/lease-resolv.conf"
+# If /etc/resolv.conf is the usual *dangling* resolved stub, fill its runtime target.
+# Never replace a resolver file already supplied by resolved or the base image.
+if [ "$(readlink -m /etc/resolv.conf)" = /run/systemd/resolve/stub-resolv.conf ]; then
+    mkdir -p /run/systemd/resolve
+    if [ ! -e /run/systemd/resolve/stub-resolv.conf ]; then
+        public=$(mktemp /run/systemd/resolve/.blinix-dns.XXXXXX)
+        install -m 0644 "$run/lease-resolv.conf" "$public"
+        ln "$public" /run/systemd/resolve/stub-resolv.conf 2>/dev/null || :
+        rm -f "$public"
+    fi
+fi
+# Publish only after both the resolver record and any missing stub target exist.
+ln "$run/lease-resolv.conf" "$run/.ready.$$"
+mv -f "$run/.ready.$$" "$run/lease-ready"
+read -r t rest </proc/uptime
+printf '%s dhcp_%s\n' "$t" "$reason" >> "$run/timing"

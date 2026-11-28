@@ -1,0 +1,8 @@
+[Unit]
+Description=Continue Debian startup after the timed Wi-Fi request
+DefaultDependencies=no
+Conflicts=shutdown.target
+Before=shutdown.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/network-bench-continue

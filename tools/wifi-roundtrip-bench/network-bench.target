@@ -1,0 +1,4 @@
+[Unit]
+Description=Run the Wi-Fi bench request before ordinary services
+DefaultDependencies=no
+Wants=systemd-remount-fs.service systemd-modules-load.service cyberdeck-service.service network-bench-continue.service
