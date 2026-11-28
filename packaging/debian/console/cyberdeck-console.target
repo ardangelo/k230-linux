@@ -1,0 +1,4 @@
+[Unit]
+Description=Start the Cyberdeck local console
+DefaultDependencies=no
+Wants=cyberdeck-continue-boot.service

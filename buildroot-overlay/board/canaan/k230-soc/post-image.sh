@@ -222,16 +222,25 @@ gen_env_bin()
 	local mkenvimage="${UBOOT_BUILD_DIR}/tools/mkenvimage"
 
 	cd  "${BINARIES_DIR}/";
-	local default_env_file=${env_dir}/default.env;
+	local default_env_file="${env_dir}/default.env"
 	local nand_default_env_file=${env_dir}/default_nand.env;
 	local nor_default_env_file=${env_dir}/default_nor.env;
-
-	if [ ${CONF} == "k230d_canmv_ilp32_defconfig" ] || [ ${CONF} == "BPI-CanMV-K230D-Zero_ilp32_defconfig" ]; then
-		sed -i 's/^bootcmd=.*$/bootcmd=run bnuttx;run blinuxilp32;/g' ${default_env_file}
-	else
-		sed -i 's/^bootcmd=.*$/bootcmd=run blinux;/g' ${default_env_file}
-	fi
-	${mkenvimage} -s 0x2000 -o uboot/env.env  ${default_env_file}
+	local sd_env="uboot/sd.env.txt"
+	case "${CONF}" in
+		k230_canmv_01studio_defconfig)
+			# Zero delay still checks for a pending serial key before booting.
+			sed -e 's/^bootcmd=.*/bootcmd=run blinux;/' -e 's/^bootdelay=.*/bootdelay=0/' "${default_env_file}" > "${sd_env}"
+			echo 'bootargs=root=/dev/mmcblk0p2 rw rootwait rootfstype=ext4 console=ttyS0,115200 loglevel=4 systemd.show_status=false' >> "${sd_env}"
+			cat "${env_dir}/cyberdeck-fast.env" >> "${sd_env}"
+			;;
+		k230d_canmv_ilp32_defconfig|BPI-CanMV-K230D-Zero_ilp32_defconfig)
+			sed 's/^bootcmd=.*/bootcmd=run bnuttx;run blinuxilp32;/' "${default_env_file}" > "${sd_env}"
+			;;
+		*)
+			sed 's/^bootcmd=.*/bootcmd=run blinux;/' "${default_env_file}" > "${sd_env}"
+			;;
+	esac
+	"${mkenvimage}" -s 0x2000 -o uboot/env.env "${sd_env}"
 	${mkenvimage} -s 0x2000 -o uboot/nand_env.env  ${nand_default_env_file}
 	${mkenvimage} -s 0x2000 -o uboot/nor_env.env  ${nor_default_env_file}
 }
@@ -258,7 +267,6 @@ gen_boot_ext4_copy_dtb()
 }
 gen_boot_ext4()
 {
-	local default_env_file=${env_dir}/default.env;
 	local logo=$(grep CONFIG_K230_BARE_DISP_LOGO_PATH ${UBOOT_BUILD_DIR}/.config  | cut -d '"' -f2 |  sed 's/\.png$/.yuv/')
 
 	cd  "${BINARIES_DIR}/";
@@ -267,10 +275,14 @@ gen_boot_ext4()
 
 	if [ ${CONF} == "k230d_canmv_ilp32_defconfig" ] || [ ${CONF} == "BPI-CanMV-K230D-Zero_ilp32_defconfig" ] ; then
 		cp ${K230_SDK_ROOT}/buildroot-overlay/board/canaan/k230-soc/rootfs_overlay/boot/nuttx-7000000-uart2.bin  boot/;
-		sed -i 's/^bootcmd=.*$/bootcmd=run bnuttx;run blinuxilp32;/g' ${default_env_file}
 	fi
 
 	cp Image boot/;
+	if [ "${CONF}" = k230_canmv_01studio_defconfig ]; then
+		# Leave /Image available for the normal SD boot and recovery.
+		k230_gzip boot/Image
+		mv boot/Image.gz boot/Image.fast.gz
+	fi
 	[ ! -f "Image_ilp32" ] ||  cp Image_ilp32 boot/;
 
 	[ -z "${logo}" ]  ||  cp ${BUILDROOT_PATH}/${logo} boot/logo.yuv;

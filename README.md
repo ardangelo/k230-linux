@@ -16,6 +16,49 @@ U-Boot establishes the Cyberdeck pin mux and 1.8 V banks; the board DTS leaves
 that mux intact. GPIO25 stays low through U-Boot handoff and is managed by the
 kernel status driver and readiness helper after boot.
 
+Cyberdeck SD images wait for the root partition with `rootwait` and use the
+115200-baud serial console at kernel log level 4 with systemd progress hidden.
+To enter U-Boot, send spaces
+over the diagnostic UART during power-on, before the autoboot prompt. The zero
+countdown checks for a pending byte immediately. For a verbose diagnostic boot,
+enter the following commands at the U-Boot prompt. These settings expire at reset.
+
+```text
+setenv bootargs root=/dev/mmcblk0p2 rw rootwait rootfstype=ext4 console=ttyS0,115200 loglevel=8 earlycon=sbi
+run blinux
+```
+
+The same SD image can also boot `/Image.fast.gz`, a hardware-compressed
+copy of its kernel. The `blinux_fast` U-Boot command checks the compressed
+header and sizes, decompresses into the normal kernel address and starts
+the same OpenSBI and device tree. Try `run blinux_fast` for one boot.
+To select it persistently with the plain kernel as fallback, use:
+
+```text
+setenv bootcmd 'run blinux_fast; run blinux'
+saveenv
+```
+
+Restore plain-kernel boot with `setenv bootcmd 'run blinux'` and `saveenv`.
+Regenerate the compressed artifact when replacing `/Image` manually, or
+select the plain kernel. Both files are generated together during an image
+build.
+
+On the Debian root filesystem, `systemctl set-default cyberdeck-console.target`
+prioritizes the local keyboard and tty1 login, then starts the regular graphical
+target and its services. `systemctl set-default graphical.target` restores the
+original ordering. A bench can try this on the existing card by installing the files under
+`packaging/debian/console/` into `/usr/lib/systemd/system/` and the
+`cyberdeck-early-console` generator into `/usr/lib/systemd/system-generators/`,
+then running `systemctl daemon-reload`. The native keyboard daemon is available
+as a separate opt-in Debian package.
+
+The [Wi-Fi boot profiles](tools/wifi-roundtrip-bench/profiles/README.md) start
+the radio and Python HTTPS client during init. They support IPv4 DHCP and IPv6
+SLAAC. Installing the profiles and selecting a profile for a boot are manual
+steps. Returning the response to PebbleOS requires a compatible UART service
+and nRF development firmware.
+
 The Cyberdeck profile omits the SDK NNCase/KPU demos, models, OpenCV and
 Python-K230 wheel. Ordinary Python, camera/media, audio, USB and wireless
 packages remain available. The general SDK examples remain selected; only their

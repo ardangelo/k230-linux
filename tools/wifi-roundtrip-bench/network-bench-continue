@@ -1,0 +1,8 @@
+#!/bin/sh
+i=0
+while [ "$i" -lt 150 ]; do
+    grep -qsE 'fetch_complete|worker_exit' /run/blinix-nettrial/timing /run/blinix-nettrial-v6/timing && break
+    sleep .2
+    i=$((i+1))
+done
+exec /bin/systemctl --no-block start graphical.target

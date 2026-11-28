@@ -1,0 +1,365 @@
+#!/usr/bin/env python3
+"""Fetch one bounded HTTPS reply over Wi-Fi and deliver it to PebbleOS."""
+import argparse
+@ipv4
+import fcntl
+@ipv6
+import ipaddress
+@both
+import hashlib
+import http.client
+import json
+import math
+import os
+import secrets
+import signal
+import socket
+import ssl
+import struct
+import subprocess
+import time
+from urllib.parse import urlsplit
+
+MAX_BODY = 192
+RESULT_SOCKET = "/run/cyberdeck-service/net-result.sock"
+
+
+def report(event, **values):
+    print(json.dumps({"event": event, "uptime": round(time.clock_gettime(time.CLOCK_BOOTTIME), 3),
+                      **values}), flush=True)
+
+
+@ipv4
+def wifi_address(interface):
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+        request = struct.pack("256s", interface.encode("ascii"))
+        # SIOCGIFADDR on Linux
+        address = fcntl.ioctl(probe, 0x8915, request)
+        return socket.inet_ntoa(address[20:24])
+
+
+def fetch(url, interface, timeout, context):
+@ipv6
+def fetch(url, interface, timeout, context, source):
+@both
+    host = url.hostname
+    port = url.port or 443
+    path = url.path or "/"
+    if url.query:
+        path += "?" + url.query
+@ipv4
+    addresses = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
+@ipv6
+    addresses = socket.getaddrinfo(host, port, socket.AF_INET6, socket.SOCK_STREAM)
+@both
+    last_error = None
+    for _, socktype, proto, _, address in addresses:
+@ipv4
+        with socket.socket(socket.AF_INET, socktype, proto) as tcp:
+@ipv6
+        with socket.socket(socket.AF_INET6, socktype, proto) as tcp:
+@both
+            tcp.settimeout(timeout)
+            tcp.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, interface.encode() + b"\0")
+            try:
+@ipv6
+                tcp.bind((source, 0))
+@both
+                tcp.connect(address)
+            except OSError as exc:
+                last_error = exc
+                continue
+            report("tcp", remote=address[0], local=tcp.getsockname()[0])
+            with context.wrap_socket(tcp, server_hostname=host) as tls:
+                report("tls", version=tls.version())
+                conn = http.client.HTTPSConnection(host, port, timeout=timeout, context=context)
+                conn.sock = tls
+                try:
+                    conn.request("GET", path, headers={"User-Agent": "Cyberdeck/1",
+                                                       "Cache-Control": "no-cache",
+                                                       "Accept-Encoding": "identity"})
+                    res = conn.getresponse()
+                    body = res.read(MAX_BODY + 1)
+                    if len(body) > MAX_BODY:
+                        raise ValueError(f"response exceeds {MAX_BODY} bytes")
+                    if res.length:
+                        raise http.client.IncompleteRead(body, res.length)
+@ipv4
+                    if not 100 <= res.status <= 599:
+                        raise ValueError(f"invalid HTTP status {res.status}")
+@ipv6
+                    if res.status != 200:
+                        raise ValueError(f"unexpected HTTP status {res.status}")
+@both
+                    return res.status, body
+                finally:
+                    conn.close()
+    raise last_error or OSError("no Wi-Fi route to server")
+
+
+def deliver(request_id, status, body, deadline):
+    packet = struct.pack("!IH", request_id, status) + body
+    with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as sock:
+        sock.bind(f"\0cyberdeck-fetch-{os.getpid()}-{request_id}")
+        while time.monotonic() < deadline:
+            try:
+                sock.settimeout(min(0.5, max(0.01, deadline - time.monotonic())))
+                sock.connect(RESULT_SOCKET)
+                sock.send(packet)
+                reply = sock.recv(160).decode("ascii")
+            except (FileNotFoundError, ConnectionRefusedError, socket.timeout):
+                time.sleep(0.05)
+                continue
+            if reply == f"DELIVERED {request_id}":
+                return
+            if reply in (f"ERROR {request_id} busy", f"ERROR {request_id} radio-timeout"):
+                time.sleep(0.1)
+                continue
+            if reply.startswith(f"ERROR {request_id} "):
+                raise RuntimeError(reply)
+        raise TimeoutError("PebbleOS transport acknowledgement timed out")
+
+
+@ipv4
+def ready_address(interface, deadline):
+    # The hook atomically renames a hard link to a complete lease record over this
+    # path. Holding its fd pins that exact address/DNS pair across DHCP renewals.
+    while time.monotonic() < deadline:
+        try:
+            with open("/run/@PREFIX@/lease-ready", encoding="ascii") as lease:
+                expected = lease.readline().rstrip().removeprefix("# lease_ipv4=")
+                if wifi_address(interface) != expected:
+                    time.sleep(.02)
+                    continue
+                if not any(line.startswith("nameserver ") for line in lease):
+                    raise ValueError("lease supplied no DNS servers")
+                fd = lease.fileno()
+                subprocess.run(["mount", "-n", "--no-canonicalize", "--bind",
+                                f"/proc/self/fd/{fd}", "/etc/resolv.conf"],
+                               pass_fds=(fd,), check=True)
+                if not os.path.samestat(os.fstat(fd), os.stat("/etc/resolv.conf")):
+                    raise RuntimeError("private resolver does not match the DHCP record")
+                return expected
+        except FileNotFoundError:
+            pass
+        except OSError as exc:
+            if exc.errno not in (19, 99):  # ENODEV, EADDRNOTAVAIL
+                raise
+        time.sleep(.02)
+    raise TimeoutError("confirmed DHCP address and DNS unavailable")
+
+
+@ipv6
+def rdnss_listener():
+    # rtnetlink multicasts RTM_NEWNDUSEROPT for IPv6 RA options.
+    try:
+        sock = socket.socket(socket.AF_NETLINK, socket.SOCK_RAW, socket.NETLINK_ROUTE)
+        sock.bind((0, 1 << 19))  # RTNLGRP_ND_USEROPT (20)
+        sock.setblocking(False)
+        return sock
+    except OSError:
+        return None
+
+
+def update_rdnss(sock, index, servers):
+    if not sock:
+        return
+    for _ in range(16):
+        try:
+            packet = sock.recv(65535)
+        except BlockingIOError:
+            break
+        offset = 0
+        while offset + 16 <= len(packet):
+            size, kind = struct.unpack_from("=IH", packet, offset)
+            if size < 16 or offset + size > len(packet):
+                break
+            data = packet[offset + 16:offset + size]
+            offset += (size + 3) & ~3
+            if kind != 68 or len(data) < 16:
+                continue
+            family, _, length, iface, typ, code = struct.unpack_from("=BBHiBB", data)
+            if (family, iface, typ, code) != (socket.AF_INET6, index, 134, 0):
+                continue
+            options = data[16:16 + length]
+            while len(options) >= 2:
+                n = options[1] * 8
+                if not n or n > len(options):
+                    break
+                opt, options = options[:n], options[n:]
+                if opt[0] != 25 or len(opt) < 24 or (len(opt) - 8) % 16:
+                    continue
+                lifetime = int.from_bytes(opt[4:8], "big")
+                for i in range(8, len(opt), 16):
+                    addr = ipaddress.IPv6Address(opt[i:i+16])
+                    if addr.is_multicast or addr.is_unspecified or addr.is_loopback:
+                        continue
+                    if lifetime:
+                        servers[addr] = time.monotonic() + lifetime
+                    else:
+                        servers.pop(addr, None)
+
+
+def global_source(interface):
+    try:
+        with open("/proc/net/if_inet6") as addresses:
+            for line in addresses:
+                addr, _, _, scope, flags, name = line.split()
+                # Exclude tentative, DAD-failed, deprecated, and optimistic addresses.
+                if name != interface or int(scope, 16) or int(flags, 16) & 0x6c:
+                    continue
+                ip = ipaddress.IPv6Address(int(addr, 16))
+                if ip.packed[0] & 0xe0 == 0x20 and ip.is_global:
+                    return str(ip)
+    except FileNotFoundError:
+        pass
+    return None
+
+
+def default_route(interface):
+    try:
+        with open("/proc/net/ipv6_route") as routes:
+            for line in routes:
+                fields = line.split()
+                if len(fields) < 10 or fields[-1] != interface:
+                    continue
+                flags = int(fields[8], 16)
+                if int(fields[0], 16) == 0 and fields[1] == "00" and flags & 1 and not flags & 0x200:
+                    return True
+    except FileNotFoundError:
+        pass
+    return False
+
+
+def wait_v6(interface, deadline, listener):
+    servers = {}
+    while time.monotonic() < deadline:
+        try:
+            index = socket.if_nametoindex(interface)
+        except OSError:
+            time.sleep(.02)
+            continue
+        update_rdnss(listener, index, servers)
+        address = global_source(interface)
+        if address and default_route(interface):
+            active = [ip for ip, expiry in servers.items() if expiry > time.monotonic()]
+            dns = [str(ip) + ("%" + interface if ip.is_link_local else "") for ip in active[:2]]
+            fallback = "2606:4700:4700::1111"  # Cloudflare, explicitly selected for this benchmark
+            if fallback not in dns:
+                dns.append(fallback)
+            routed = []
+            for server in dns:
+                route = ["ip", "-j", "-6", "route", "get", server.split("%")[0]]
+                if "%" in server:
+                    route.extend(["oif", interface])
+                result = subprocess.run(route, capture_output=True, text=True)
+                if result.returncode == 0 and any(item.get("dev") == interface
+                                                   for item in json.loads(result.stdout)):
+                    routed.append(server)
+            if not routed:
+                time.sleep(.05)
+                continue
+            dns = routed
+            path = "/run/@PREFIX@/v6-resolv.conf"
+            with open(path, "w", encoding="ascii") as file:
+                file.write("options timeout:1 attempts:2\n")
+                file.writelines("nameserver " + ip + "\n" for ip in dns)
+            if not os.path.exists("/etc/resolv.conf"):
+                # A fresh /run may not yet contain systemd-resolved's stub target.
+                target = os.path.realpath("/etc/resolv.conf")
+                if target not in ("/run/systemd/resolve/stub-resolv.conf", "/run/systemd/resolve/resolv.conf"):
+                    raise RuntimeError("resolver target unavailable")
+                os.makedirs(os.path.dirname(target), exist_ok=True)
+                # /run is shared with the host; put an empty target on a private mount.
+                parent = os.path.dirname(target)
+                subprocess.run(["mount", "-t", "tmpfs", "-o", "mode=755,nodev,nosuid",
+                                "tmpfs", parent], check=True)
+                open(target, "a").close()
+            subprocess.run(["mount", "-n", "--bind", path, "/etc/resolv.conf"], check=True)
+            if not os.path.samefile(path, "/etc/resolv.conf"):
+                raise RuntimeError("IPv6 resolver was not installed in private namespace")
+            report("ipv6_ready", address=address, resolver_source="ra" if any(str(ip) == dns[0].split("%")[0] for ip in active) else "bench-cloudflare",
+                   resolver=dns[0])
+            return address
+        time.sleep(.02)
+    raise TimeoutError("no preferred global IPv6 address and default route on Wi-Fi")
+
+
+@both
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("url")
+    parser.add_argument("--interface", default="wlan0")
+    parser.add_argument("--timeout", type=float, default=60)
+    args = parser.parse_args()
+    url = urlsplit(args.url)
+    if (url.scheme != "https" or not url.hostname or url.username is not None
+            or url.password is not None or url.fragment):
+        parser.error("an HTTPS endpoint without credentials or a fragment is required")
+    if (not args.interface.isascii() or len(args.interface) not in range(1, 16)
+            or "\0" in args.interface or not math.isfinite(args.timeout) or args.timeout <= 0):
+        parser.error("invalid interface name or timeout")
+    try:
+        url.port
+    except ValueError as exc:
+        parser.error(str(exc))
+    # Socket timeouts apply to individual operations. Bound DNS, slow bodies and delivery too.
+    def expire(signum, frame):
+        raise TimeoutError("network result deadline expired")
+    signal.signal(signal.SIGALRM, expire)
+    signal.setitimer(signal.ITIMER_REAL, args.timeout)
+    deadline = time.monotonic() + args.timeout
+    request_id = secrets.randbelow(2**32 - 1) + 1
+    report("start", request_id=request_id, host=url.hostname)
+@ipv6
+    listener = rdnss_listener()
+@both
+    context = ssl.create_default_context()
+    report("ca_ready", request_id=request_id)
+@ipv4
+    address = ready_address(args.interface, deadline)
+    report("lease_dns_ready", request_id=request_id)
+    report("wifi_ipv4", address=address)
+    ping = subprocess.Popen(["ping", "-4", "-n", "-I", args.interface, "-c", "1", "-W", "2",
+@ipv6
+    try:
+        address = wait_v6(args.interface, deadline, listener)
+    finally:
+        if listener:
+            listener.close()
+    ping = subprocess.Popen(["ping", "-6", "-n", "-I", args.interface, "-c", "1", "-W", "2",
+@both
+                             url.hostname], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    try:
+        while time.monotonic() < deadline:
+            try:
+@ipv4
+                status, body = fetch(url, args.interface, min(5, deadline - time.monotonic()), context)
+@ipv6
+                status, body = fetch(url, args.interface, min(5, deadline - time.monotonic()), context, address)
+@both
+                break
+            except ssl.SSLCertVerificationError:
+                raise
+            except (OSError, http.client.HTTPException) as exc:
+                report("retry", error=type(exc).__name__)
+                time.sleep(0.2)
+        else:
+            raise TimeoutError("HTTPS fetch timed out")
+        report("https_reply", request_id=request_id, status=status, length=len(body),
+               sha256=hashlib.sha256(body).hexdigest())
+        deliver(request_id, status, body, deadline)
+        report("transport_ack", request_id=request_id)
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        try:
+            output, _ = ping.communicate(timeout=2.5)
+        except subprocess.TimeoutExpired:
+            ping.kill()
+            output, _ = ping.communicate()
+        report("icmp", success=ping.returncode == 0,
+               summary=output.decode(errors="replace").strip().splitlines()[-1:])
+
+
+if __name__ == "__main__":
+    main()

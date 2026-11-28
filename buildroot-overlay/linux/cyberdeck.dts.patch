@@ -3,7 +3,7 @@ new file mode 100644
 index 000000000..6ae6c638a
 --- /dev/null
 +++ b/arch/riscv/boot/dts/canaan/cyberdeck.dts
-@@ -0,0 +1,153 @@
+@@ -0,0 +1,157 @@
 +// SPDX-License-Identifier: GPL-2.0 OR MIT
 +/*
 + * Copyright (C) 2024 Yangyu Chen <cyy@cyyself.name>
@@ -72,6 +72,8 @@ index 000000000..6ae6c638a
 +	status = "okay";
 +};
 +&mmc_sd0{
++	no-sdio;
++	no-mmc;
 +	status = "okay";
 +	no-1-8-v;
 +	cap-sd-highspeed;
@@ -81,6 +83,8 @@ index 000000000..6ae6c638a
 +	clock-names = "core", "bus";
 +};
 +&mmc_sd1 {
++    no-sd;
++    no-mmc;
 +    status = "okay";
 +    bus-width = <4>;
 +    no-1-8-v;

@@ -1,0 +1,14 @@
+[Unit]
+Description=Fetch a Wi-Fi response for PebbleOS
+ConditionPathExists=/etc/cyberdeck/net-fetch.conf
+Wants=NetworkManager.service cyberdeck-service.service
+After=systemd-remount-fs.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/cyberdeck/net-fetch.conf
+ExecStart=/usr/local/libexec/cyberdeck-net-fetch ${CYBERDECK_FETCH_URL}
+TimeoutStartSec=75
+
+[Install]
+WantedBy=multi-user.target

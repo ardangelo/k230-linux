@@ -1,0 +1,102 @@
+#!/bin/sh
+# Generate from installed package units so upgrades retain their login, daemon
+# and shutdown commands. Ordering dependencies cannot be reset by a drop-in.
+set -eu
+out=$1
+vendor=/usr/lib/systemd/system
+
+# Change service ordering only when an early target has been selected.
+target=$(basename "$(readlink -f /etc/systemd/system/default.target || true)")
+for arg in $(cat /proc/cmdline); do
+    case "$arg" in systemd.unit=*) target=${arg#systemd.unit=} ;; esac
+done
+case "$target" in
+    cyberdeck-console.target|network-bench.target) ;;
+    *) exit 0 ;;
+esac
+
+# Replace just the network ordering. Unknown package revisions keep their
+# vendor defaults. A full unit under /etc or /run takes normal precedence.
+early_local_service() {
+    unit=$1
+    ready=$2
+    src=$vendor/$unit
+    [ -r "$src" ] || return 0
+    awk -v ready="$ready" '
+        /^\[/ { in_unit = ($0 == "[Unit]") }
+        in_unit && /^After=/ && /(^After=|[[:space:]])network\.target([[:space:]]|$)/ {
+            sub(/^After=/, "")
+            printf "After=%s", ready
+            for (i = 1; i <= NF; i++) if ($i != "network.target") printf " %s", $i
+            print ""
+            print "DefaultDependencies=no"
+            print "Before=shutdown.target"
+            print "Conflicts=shutdown.target"
+            changed = 1
+            next
+        }
+        { print }
+        END { if (!changed) exit 1 }
+    ' "$src" > "$out/.$unit" && mv "$out/.$unit" "$out/$unit"
+    rm -f "$out/.$unit"
+}
+
+early_local_service cyberdeck-service.service 'systemd-remount-fs.service systemd-modules-load.service'
+
+# The shipped Debian image resolves accounts locally. With network-backed
+# accounts retain the distribution's network ordering for session admission.
+local_accounts() {
+    awk '
+        { sub(/#.*/, "") }
+        /^(passwd|group|shadow):/ {
+            seen[$1] = 1
+            for (i = 2; i <= NF; i++) if ($i != "files" && $i != "systemd") exit 1
+        }
+        END { if (!seen["passwd:"] || !seen["group:"] || !seen["shadow:"]) exit 1 }
+    ' /etc/nsswitch.conf
+}
+
+local_filesystems() {
+    # Preserve normal ordering for remote homes and other network mounts.
+    awk '
+        /^[[:space:]]*#/ { next }
+        NF >= 4 && ($1 ~ /:/ || $1 ~ /^\/\// || $3 ~ /^(autofs|nfs4?|cifs|smb3|ceph|afs|9p)$/ ||
+                    $4 ~ /(^|,)_netdev(,|$)/) { exit 1 }
+    ' /etc/fstab
+}
+
+if local_accounts && local_filesystems; then
+    # tmpfiles creates /run/nologin. Open admission after it finishes;
+    # preserve upstream remote-fs.target, home.mount and nss-user-lookup.target.
+    early_local_service systemd-user-sessions.service 'local-fs.target systemd-tmpfiles-setup.service'
+    # For remote account lookups or mounts the continuation starts the
+    # distribution's complete graph immediately, with its normal prerequisites.
+    mkdir -p "$out/cyberdeck-continue-boot.service.d"
+    cat > "$out/cyberdeck-continue-boot.service.d/local-console.conf" <<'UNIT'
+[Unit]
+Wants=systemd-remount-fs.service systemd-modules-load.service local-fs.target
+Wants=systemd-tmpfiles-setup.service systemd-user-sessions.service
+Wants=getty@tty1.service cyberdeck-service.service
+After=getty@tty1.service cyberdeck-service.service
+UNIT
+fi
+
+for unit in getty@tty1.service serial-getty@ttyS0.service; do
+    mkdir -p "$out/$unit.d"
+    cat > "$out/$unit.d/50-cyberdeck-console.conf" <<'UNIT'
+[Unit]
+DefaultDependencies=no
+After=systemd-remount-fs.service
+Before=shutdown.target
+Conflicts=shutdown.target
+
+[Service]
+Type=simple
+UNIT
+done
+# The built-in serial console has fixed dimensions and cannot answer agetty's
+# terminal-size query while the operator is still waiting for the first prompt.
+cat >> "$out/serial-getty@ttyS0.service.d/50-cyberdeck-console.conf" <<'UNIT'
+TTYColumns=80
+TTYRows=24
+UNIT

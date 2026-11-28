@@ -1,0 +1,135 @@
+#!/bin/sh
+set -eu
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+umask 077
+run=/run/@PREFIX@
+bench=/root/blinix-boot-bench
+stamp() { read -r t rest </proc/uptime; printf '%s %s\n' "$t" "$*" >> "$run/timing"; }
+keep=0
+fetch_pid=
+cleanup() {
+    rc=$?
+    trap - EXIT
+    set +e
+    stamp "worker_exit $rc"
+    if [ "$keep" = 0 ]; then
+        if [ -n "$fetch_pid" ]; then
+            kill "$fetch_pid" 2>/dev/null || :
+            wait "$fetch_pid" 2>/dev/null || :
+        fi
+        # Only stop the per-interface clients this worker actually started.
+        if [ -f "$run/dhcp-started" ]; then dhcpcd -4 -k wlan0 >/dev/null 2>&1; fi
+        if [ -S "$run/control/wlan0" ]; then wpa_cli -p "$run/control" -i wlan0 terminate >/dev/null 2>&1; fi
+        rm -f /run/NetworkManager/conf.d/99-@PREFIX@.conf
+        # NM reads its original configuration at launch, or reloads it if already active.
+        if timeout 1 nmcli general reload conf >/dev/null 2>&1; then
+            timeout 2 nmcli device set wlan0 managed yes >/dev/null 2>&1
+        fi
+    fi
+    exit "$rc"
+}
+trap cleanup EXIT
+stamp start
+@ipv4
+# Read a URL value without executing the root configuration as shell code.
+url=$(sed -n 's/^CYBERDECK_FETCH_URL=//p' /etc/cyberdeck/net-fetch.conf | tail -1)
+case "$url" in \"*\") url=${url#\"}; url=${url%\"};; \'*\') url=${url#\'}; url=${url%\'};; esac
+[ -n "$url" ] || { echo 'Missing CYBERDECK_FETCH_URL'; exit 1; }
+@ipv6
+url=https://httpbingo.org/uuid
+@both
+stamp fetch_spawn
+unshare --mount --propagation private /usr/local/sbin/@PREFIX@-fetch "$url" \
+    --interface wlan0 --timeout 60 > "$run/fetch.jsonl" 2> "$run/fetch.err" &
+fetch_pid=$!
+freq=5220
+if [ -s "$bench/wifi.freq" ]; then IFS= read -r freq < "$bench/wifi.freq" || :; fi
+case "$freq" in ''|*[!0-9]*) echo 'Invalid Wi-Fi frequency'; exit 1;; esac
+[ "$freq" -ge 2400 ] && [ "$freq" -le 7125 ] || { echo 'Invalid Wi-Fi frequency'; exit 1; }
+
+# The benchmark config is never printed. Give each network a frequency hint unless
+# provisioning already supplies one. Use a private control socket for this supplicant.
+awk -v ctrl="$run/control" -v f="$freq" '
+  BEGIN { print "ctrl_interface=" ctrl }
+  /^[[:space:]]*ctrl_interface[[:space:]]*=/ {next}
+  /^[[:space:]]*network[[:space:]]*=[[:space:]]*\{/ {inside=1; hint=0}
+  inside && /^[[:space:]]*(scan_freq|freq_list)[[:space:]]*=/ {hint=1}
+  inside && /^[[:space:]]*}/ {if(!hint) print "    scan_freq=" f; inside=0}
+  {print}
+' "$bench/wifi.conf" > "$run/wifi.conf"
+
+modprobe aic8800_fdrv
+count=0
+while [ ! -d /sys/class/net/wlan0 ] && [ "$count" -lt 100 ]; do sleep .05; count=$((count+1)); done
+[ -d /sys/class/net/wlan0 ] || { echo 'No wlan0'; exit 1; }
+stamp interface
+@ipv6
+# Keep duplicate address detection, SLAAC, and router advertisements enabled.
+modprobe ipv6 2>/dev/null || :
+v6=/proc/sys/net/ipv6/conf/wlan0
+[ -d "$v6" ] || { echo 'IPv6 not available on wlan0'; exit 1; }
+[ "$(cat "$v6/disable_ipv6")" = 0 ] || echo 0 > "$v6/disable_ipv6"
+echo 2 > "$v6/accept_ra"
+echo 1 > "$v6/accept_ra_defrtr"
+echo 1 > "$v6/accept_ra_pinfo"
+echo 1 > "$v6/autoconf"
+[ "$(cat "$v6/accept_dad")" -ge 1 ] || echo 1 > "$v6/accept_dad"
+[ "$(cat "$v6/dad_transmits")" -ge 1 ] || echo 1 > "$v6/dad_transmits"
+@both
+ip link set wlan0 up
+wpa_supplicant -B -P "$run/wpa.pid" -Dnl80211 -i wlan0 -c "$run/wifi.conf" >/dev/null
+stamp supplicant
+# Observe association in parallel while dhcpcd waits for carrier.
+(
+    n=0
+    while [ "$n" -lt 300 ]; do
+        if wpa_cli -p "$run/control" -i wlan0 status 2>/dev/null | grep -qx 'wpa_state=COMPLETED'; then
+            stamp associated
+            exit 0
+        fi
+        sleep .05; n=$((n+1))
+    done
+) &
+cat /etc/dhcpcd.conf > "$run/dhcpcd.conf"
+printf '\ninterface wlan0\nnodelay\n' >> "$run/dhcpcd.conf"
+# Skip initial DHCP jitter and IPv4LL fallback, retain DHCP ACK and ARP conflict checks.
+# Limit stale cached-lease INIT-REBOOT to one second before normal discovery.
+@ipv4
+: > "$run/dhcp-started"
+dhcpcd -4 --waitip=4 -L -y 1 -t 20 -f "$run/dhcpcd.conf" -c /usr/local/sbin/@PREFIX@-dhcp-hook wlan0     >"$run/dhcp.log" 2>&1
+count=0
+while [ ! -s "$run/lease-ready" ] && [ "$count" -lt 60 ]; do sleep .05; count=$((count+1)); done
+[ -s "$run/lease-ready" ] || { echo 'No DHCP-supplied DNS'; exit 1; }
+keep=1
+stamp dhcp_ready
+
+# Also populate resolved for other processes once its D-Bus interface exists.
+(
+    n=0
+    command -v resolvectl >/dev/null || exit 0
+    dns=$(awk '$1=="nameserver"{print $2}' "$run/lease-resolv.conf")
+    while [ "$n" -lt 50 ]; do
+        if timeout .5 resolvectl dns wlan0 $dns >/dev/null 2>&1; then
+            resolvectl default-route wlan0 yes >/dev/null 2>&1 || :
+            stamp resolved_link
+            exit 0
+        fi
+        sleep .15; n=$((n+1))
+    done
+) &
+
+@ipv6
+keep=1
+(
+    : > "$run/dhcp-started"
+    if dhcpcd -4 --waitip=4 -L -y 1 -t 20 -f "$run/dhcpcd.conf" \
+        -c /usr/local/sbin/@PREFIX@-dhcp-hook wlan0 >"$run/dhcp.log" 2>&1; then
+        stamp ipv4_dhcp_ready
+    else
+        stamp ipv4_dhcp_failed
+    fi
+) &
+@both
+wait "$fetch_pid"
+stamp fetch_complete

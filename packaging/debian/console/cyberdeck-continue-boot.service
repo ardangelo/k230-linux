@@ -1,0 +1,9 @@
+[Unit]
+Description=Continue Debian startup after the local console
+DefaultDependencies=no
+Conflicts=shutdown.target
+Before=shutdown.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/systemctl --no-block start graphical.target
